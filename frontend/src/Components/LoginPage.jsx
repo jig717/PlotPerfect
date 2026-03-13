@@ -1,0 +1,98 @@
+import { useState } from "react";
+import { Link } from "react-router-dom";
+import { ToastContainer, toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
+import { handleGoogleLogin } from "../utils/authUtils";
+ 
+const LOGIN_API_URL = "https://node5.onrender.com/user/login";
+
+const styles = {
+  wrap: { minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(135deg, #1a0f0f 0%, #2d1810 50%, #3d1f10 100%)", padding: "20px" },
+  card: { background: "rgba(255,248,240,0.08)", backdropFilter: "blur(20px)", padding: "40px", borderRadius: "20px", width: "100%", maxWidth: "380px", boxShadow: "0 25px 50px rgba(0,0,0,0.4)" },
+  title: { fontSize: "28px", fontWeight: "700", textAlign: "center", marginBottom: "5px", color: "#fff" },
+  sub: { textAlign: "center", color: "rgba(255,255,255,0.6)", marginBottom: "25px", fontSize: "14px" },
+  input: { width: "100%", padding: "14px 14px 14px 45px", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "12px", fontSize: "14px", background: "rgba(255,255,255,0.05)", color: "#fff", outline: "none", boxSizing: "border-box", marginBottom: "15px" },
+  icon: { position: "absolute", left: "14px", top: "50%", transform: "translateY(-50%)", width: "18px", height: "18px", color: "rgba(255,255,255,0.4)" },
+  inpWrap: { position: "relative", marginBottom: "15px" },
+  toggle: { position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.4)", padding: "4px" },
+  btn: { width: "100%", padding: "14px", background: "linear-gradient(135deg, #f97316 0%, #ea580c 100%)", color: "#fff", border: "none", borderRadius: "12px", fontSize: "15px", fontWeight: "600", cursor: "pointer", marginTop: "10px" },
+  div: { display: "flex", alignItems: "center", margin: "20px 0" },
+  line: { flex: 1, height: "1px", background: "rgba(255,255,255,0.15)" },
+  or: { padding: "0 12px", color: "rgba(255,255,255,0.5)", fontSize: "12px" },
+  ggBtn: { width: "100%", padding: "12px", background: "rgba(255,255,255,0.1)", color: "#fff", border: "1px solid rgba(255,255,255,0.2)", borderRadius: "12px", fontSize: "14px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" },
+  link: { textAlign: "center", marginTop: "20px", color: "rgba(255,255,255,0.6)", fontSize: "13px" },
+  a: { color: "#fb923c", textDecoration: "none", fontWeight: "600" },
+  err: { color: "#fca5a5", fontSize: "11px", marginTop: "-12px", marginBottom: "8px" }
+};
+
+export default function LoginPage() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPwd, setShowPwd] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState({});
+
+  const validate = () => {
+    const e = {};
+    if (!email) e.email = "Email required";
+    else if (!/\S+@\S+\.\S+/.test(email)) e.email = "Invalid email";
+    if (!password) e.password = "Password required";
+    setErr(e);
+    return Object.keys(e).length === 0;
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!validate()) return;
+    setLoading(true);
+    try {
+      const res = await fetch(LOGIN_API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success("Login successful!");
+        if (data.token) localStorage.setItem("token", data.token);
+      } else {
+        toast.error(data.message || "Login failed");
+      }
+    } catch {
+      toast.error("Network error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <>
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}.btn:hover{transform:translateY(-2px);box-shadow:0 10px 30px rgba(249,115,22,0.4)}.input::placeholder{color:rgba(255,255,255,0.4)}.input:focus{border-color:#f97316;background:rgba(255,255,255,0.1)}`}</style>
+      <ToastContainer position="top-right" autoClose={3000} />
+      <div style={styles.wrap}>
+        <div style={styles.card}>
+          <h2 style={styles.title}>Welcome Back</h2>
+          <p style={styles.sub}>Sign in to continue</p>
+          <form onSubmit={handleSubmit}>
+            <div style={styles.inpWrap}>
+              <svg style={styles.icon} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+              <input style={styles.input} type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
+            </div>
+            {err.email && <div style={styles.err}>{err.email}</div>}
+            <div style={styles.inpWrap}>
+              <svg style={styles.icon} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+              <input style={styles.input} type={showPwd ? "text" : "password"} placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} />
+              <button style={styles.toggle} type="button" onClick={() => setShowPwd(!showPwd)}>{showPwd ? "👁️" : "👁️‍🗨️"}</button>
+            </div>
+            {err.password && <div style={styles.err}>{err.password}</div>}
+            <button style={styles.btn} type="submit" disabled={loading}>{loading ? "Signing in..." : "Login"}</button>
+          </form>
+          <div style={styles.div}><span style={styles.line}></span><span style={styles.or}>or</span><span style={styles.line}></span></div>
+          <button style={styles.ggBtn} onClick={() => handleGoogleLogin(toast)}>🔵 Continue with Google</button>
+          <p style={styles.link}>Don't have an account? <Link to="/signup" style={styles.a}>Sign Up</Link></p>
+        </div>
+      </div>
+    </>
+  );
+}
+
