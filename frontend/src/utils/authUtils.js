@@ -1,41 +1,27 @@
-// OAuth Configuration - Replace with your actual OAuth credentials
+// OAuth Configuration - kept for reference, but not used directly anymore
 const OAUTH_CONFIG = {
   google: {
-    clientId: import.meta.env.VITE_GOOGLE_CLIENT_ID || 'YOUR_GOOGLE_CLIENT_ID',
-    redirectUri: import.meta.env.VITE_GOOGLE_REDIRECT_URI || `${window.location.origin}/auth/google/callback`,
+    clientId: import.meta.env.GOOGLE_CLIENT_ID ,
+    redirectUri: import.meta.env.GOOGLE_REDIRECT_URI || `${window.location.origin}/auth/google/callback`,
     authUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
     scope: 'openid email profile',
   },
 };
 
 /**
- * Initiates Google OAuth login flow
+ * Initiates Google OAuth login flow by redirecting to backend endpoint
  * @param {Function} toast - Optional toast function for notifications
  */
 export const handleGoogleLogin = (toast = null) => {
-  const { clientId, redirectUri, authUrl, scope } = OAUTH_CONFIG.google;
-  
-  const params = new URLSearchParams({
-    client_id: clientId,
-    redirect_uri: redirectUri,
-    response_type: 'code',
-    scope: scope,
-    prompt: 'select_account',
-  });
+  // Backend Google OAuth endpoint – assumes your backend will handle the full OAuth flow
+  const backendAuthUrl = `${import.meta.env.REACT_APP_API_URL || 'http://localhost:3400'}/auth/google`;
 
-  const fullUrl = `${authUrl}?${params.toString()}`;
-  
-  // if (toast) {
-  //   toast.info('Redirecting to Google...');
-  // }
-  
-  // Uncomment below to enable actual OAuth flow
-  // window.location.href = fullUrl;
-  
-  // For demo purposes, show toast notification
   if (toast) {
-    toast.info('Google OAuth: Redirecting to Google login...');
+    toast.info('Redirecting to Google...');
   }
+
+  // Redirect to backend – the backend will redirect to Google, then back to frontend
+  window.location.href = backendAuthUrl;
 };
 
 /**

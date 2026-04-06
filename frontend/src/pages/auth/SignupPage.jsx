@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import { handleGoogleLogin } from '../utils/authUtils';
+import { handleGoogleLogin } from '../../utils/authUtils';
+import { useAuth } from '../../context/AuthContext'; 
 
 const styles = {
   wrap: { minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(135deg, #1a0f0f 0%, #2d1810 50%, #3d1f10 100%)", padding: "20px" },
@@ -22,16 +23,17 @@ const styles = {
   a: { color: "#fb923c", textDecoration: "none", fontWeight: "600" },
 };
 
-const Signup = () => {
+const SignupPage = () => {
   const navigate = useNavigate();
-  const [form, setForm] = useState({ username: '', email: '', password: '', confirmPassword: '' });
-  const [showPwd, setShowPwd] = useState(false);
+  const { signup } = useAuth();
+  const [form, setForm] = useState({ username: '', email: '', password: '', confirmPassword: '', role: 'buyer' }) 
+ const [showPwd, setShowPwd] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
     if (form.password !== form.confirmPassword) {
@@ -45,13 +47,40 @@ const Signup = () => {
     }
 
     setLoading(true);
-    setTimeout(() => {
-      console.log('Signup:', form);
-      toast.success("Signup successful!");
-      setForm({ username: '', email: '', password: '', confirmPassword: '' });
-      setLoading(false);
-      navigate('/');
-    }, 1000);
+    
+  //   // Map username to name as expected by backend
+  // const result = await signup({
+  //   name: form.username,
+  //   email: form.email,
+  //   password: form.password,
+  //   role: 'buyer', // default role
+  // });
+
+    // Call signup (does NOT auto-login)
+    const result = await signup({
+      name: form.username,   // map username to name
+      email: form.email,
+      password: form.password,
+      role: form.role,       // use selected role
+    });
+
+//   if (result.success) {
+//     toast.success("Account created successfully!");
+//     // Role-based redirect (user is automatically logged in)
+//     const role = result.role;
+//     if (role === "admin") navigate("/admin");
+//     else if (role === "agent" || role === "owner") navigate("/dashboard/agent");
+//     else navigate("/login ");
+//   }
+//   // Error is already toasted inside context
+//   setLoading(false);
+// };
+
+ if (result.success) {
+      toast.success("Account created! Please log in.");
+      navigate('/login');   // go to login page
+    }
+    setLoading(false);
   };
 
   return (
@@ -81,16 +110,33 @@ const Signup = () => {
               <input style={styles.input} name="confirmPassword" type={showConfirm ? "text" : "password"} placeholder="Confirm Password" value={form.confirmPassword} onChange={handleChange} required />
               <button style={styles.toggle} type="button" onClick={() => setShowConfirm(!showConfirm)}>{showConfirm ? "👁️" : "👁️‍🗨️"}</button>
             </div>
+<div style={styles.inpWrap}>
+  <svg style={styles.icon} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+  </svg>
+  <select
+    style={styles.input}
+    name="role"
+    value={form.role}
+    onChange={handleChange}
+    required
+  >
+   <option value="buyer" style={{ background: '#fff', color: '#1a0a2e' }}>Buyer</option>
+    <option value="owner" style={{ background: '#fff', color: '#1a0a2e' }}>Owner</option>
+    <option value="agent" style={{ background: '#fff', color: '#1a0a2e' }}>Agent</option>
+    <option value="support" style={{ background: '#fff', color: '#1a0a2e' }}>Support</option>
+  </select>
+</div>
             <button style={styles.btn} type="submit" disabled={loading}>{loading ? "Signing up..." : "Sign Up"}</button>
           </form>
           <div style={styles.div}><span style={styles.line}></span><span style={styles.or}>or</span><span style={styles.line}></span></div>
-          <button style={styles.ggBtn} onClick={() => handleGoogleLogin(toast)}>🔵 Continue with Google</button>
-          <p style={styles.link}>Already have an account? <Link to="/" style={styles.a}>Login</Link></p>
+          <button style={styles.ggBtn} onClick={() => handleGoogleLogin(toast)}> Continue with Google</button>
+          <p style={styles.link}>Already have an account? <Link to="/login" style={styles.a}>Login</Link></p>
         </div>
       </div>
     </>
   );
 };
 
-export default Signup;
+export default SignupPage;
 

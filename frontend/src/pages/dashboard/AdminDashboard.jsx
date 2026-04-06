@@ -1,0 +1,685 @@
+import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../../context/AuthContext'
+import { userService, propertyService, inquiryService } from '../../services'
+import { formatPrice, timeAgo, getInitials } from '../../utils/index'
+import { toast } from 'react-toastify'
+// Chart.js imports – added for Reports tab
+import { Bar, Pie } from 'react-chartjs-2'
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+  ArcElement,
+} from 'chart.js'
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+  ArcElement
+)
+
+const TABS = ['Overview', 'Users', 'Properties', 'Inquiries', 'Reports']
+
+// ---------- Helper chart components (new, but no existing names are changed) ----------
+function PropertyTrendChart({ properties }) {
+  const [chartData, setChartData] = useState({ labels: [], data: [] })
+
+  useEffect(() => {
+    const months = []
+    const today = new Date()
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(today.getFullYear(), today.getMonth() - i, 1)
+      months.push(d.toLocaleString('default', { month: 'short', year: 'numeric' }))
+    }
+    const counts = new Array(6).fill(0)
+    properties.forEach(prop => {
+      const created = new Date(prop.createdAt)
+      const monthIndex = (today.getFullYear() - created.getFullYear()) * 12 + (today.getMonth() - created.getMonth())
+      if (monthIndex >= 0 && monthIndex < 6) {
+        counts[5 - monthIndex]++ // reverse so oldest first
+      }
+    })
+    setChartData({ labels: months, data: counts })
+  }, [properties])
+
+  const data = {
+    labels: chartData.labels,
+    datasets: [{
+      label: 'Properties',
+      data: chartData.data,
+      backgroundColor: 'rgba(124,58,237,0.7)',
+      borderRadius: 6,
+    }],
+  }
+
+  const options = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { position: 'top', labels: { color: '#1a0a2e' } } },
+    scales: { y: { beginAtZero: true, ticks: { color: '#1a0a2e' } }, x: { ticks: { color: '#1a0a2e' } } },
+  }
+
+  return (
+    <div style={{ height: 300 }}>
+      <Bar data={data} options={options} />
+    </div>
+  )
+}
+
+function InquiryByTypeChart({ properties, inquiries }) {
+  const [chartData, setChartData] = useState({ labels: [], data: [] })
+
+  useEffect(() => {
+    const propertyMap = new Map(properties.map(p => [p._id.toString(), p.type || 'other']))
+    const typeCount = {}
+    inquiries.forEach(inq => {
+      const type = propertyMap.get(inq.property?._id?.toString()) || 'unknown'
+      typeCount[type] = (typeCount[type] || 0) + 1
+    })
+    setChartData({
+      labels: Object.keys(typeCount),
+      data: Object.values(typeCount),
+    })
+  }, [properties, inquiries])
+
+  const data = {
+    labels: chartData.labels,
+    datasets: [{
+      label: 'Inquiries',
+      data: chartData.data,
+      backgroundColor: ['#7c3aed', '#a78bfa', '#c4b5fd', '#6d28d9', '#5b21b6'],
+    }],
+  }
+
+  const options = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { position: 'top', labels: { color: '#1a0a2e' } } },
+  }
+
+  return (
+    <div style={{ height: 300 }}>
+      <Pie data={data} options={options} />
+    </div>
+  )
+}
+
+function RolePieChart({ users }) {
+  const [chartData, setChartData] = useState({ labels: [], data: [] })
+
+  useEffect(() => {
+    const roleCount = {}
+    users.forEach(u => {
+      const role = u.role || 'buyer'
+      roleCount[role] = (roleCount[role] || 0) + 1
+    })
+    setChartData({
+      labels: Object.keys(roleCount),
+      data: Object.values(roleCount),
+    })
+  }, [users])
+
+  const data = {
+    labels: chartData.labels,
+    datasets: [{
+      data: chartData.data,
+      backgroundColor: ['#7c3aed', '#a78bfa', '#c4b5fd', '#6d28d9', '#5b21b6'],
+    }],
+  }
+
+  const options = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { position: 'top', labels: { color: '#1a0a2e' } } },
+  }
+
+  return (
+    <div style={{ height: 300 }}>
+      <Pie data={data} options={options} />
+    </div>
+  )
+}
+
+function TopPropertiesTable({ properties, inquiries }) {
+  const [topProps, setTopProps] = useState([])
+
+  useEffect(() => {
+    const inquiryCount = new Map()
+    inquiries.forEach(inq => {
+      const propId = inq.property?._id?.toString()
+      if (propId) inquiryCount.set(propId, (inquiryCount.get(propId) || 0) + 1)
+    })
+    const propsWithCount = properties.map(p => ({
+      ...p,
+      inquiryCount: inquiryCount.get(p._id.toString()) || 0,
+    }))
+    propsWithCount.sort((a, b) => b.inquiryCount - a.inquiryCount)
+    setTopProps(propsWithCount.slice(0, 5))
+  }, [properties, inquiries])
+
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead>
+          <tr style={{ borderBottom: '1px solid rgba(124,58,237,0.2)' }}>
+            <th style={{ textAlign: 'left', padding: '8px', color: '#1a0a2e' }}>Title</th>
+            <th style={{ textAlign: 'left', padding: '8px', color: '#1a0a2e' }}>City</th>
+            <th style={{ textAlign: 'right', padding: '8px', color: '#1a0a2e' }}>Inquiries</th>
+          </tr>
+        </thead>
+        <tbody>
+          {topProps.map(prop => (
+            <tr key={prop._id} style={{ borderBottom: '1px solid rgba(124,58,237,0.1)' }}>
+              <td style={{ padding: '8px', color: '#1a0a2e' }}>{prop.title}</td>
+              <td style={{ padding: '8px', color: 'rgba(26,10,46,0.7)' }}>{prop.city || '-'}</td>
+              <td style={{ padding: '8px', textAlign: 'right', fontWeight: 600, color: '#7c3aed' }}>{prop.inquiryCount}</td>
+            </tr>
+          ))}
+          {topProps.length === 0 && (
+            <tr><td colSpan="3" style={{ padding: '20px', textAlign: 'center', color: 'rgba(26,10,46,0.5)' }}>No data available</td></tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function StatCard({ icon, label, value, change }) {
+  return (
+    <div 
+      style={{ 
+        background: '#ffffff', 
+        border: '1px solid rgba(124,58,237,0.12)', 
+        borderRadius: 16, 
+        padding: '20px 24px', 
+        boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
+        transition: 'all 0.25s cubic-bezier(0.2, 0, 0, 1)',
+        cursor: 'pointer',
+      }}
+      onMouseEnter={e => {
+        e.currentTarget.style.transform = 'translateY(-2px)';
+        e.currentTarget.style.boxShadow = '0 8px 24px rgba(124,58,237,0.12)';
+        e.currentTarget.style.borderColor = 'rgba(124,58,237,0.3)';
+      }}
+      onMouseLeave={e => {
+        e.currentTarget.style.transform = 'translateY(0)';
+        e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.02)';
+        e.currentTarget.style.borderColor = 'rgba(124,58,237,0.12)';
+      }}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: 16 }}>
+        <div style={{ 
+          width: 48, height: 48, borderRadius: 14, background: '#f0eeff', 
+          border: '1px solid rgba(124,58,237,0.15)', display: 'flex', 
+          alignItems: 'center', justifyContent: 'center', fontSize: 20, color: '#7c3aed' 
+        }}>
+          {icon}
+        </div>
+        {change && (
+          <span style={{ 
+            fontSize: 12, fontWeight: 600, padding: '4px 8px', borderRadius: 20, 
+            background: 'rgba(34,197,94,0.1)', color: '#16a34a' 
+          }}>
+            {change}
+          </span>
+        )}
+      </div>
+      <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 32, fontWeight: 800, color: '#1a0a2e', lineHeight: 1.2 }}>
+        {value}
+      </div>
+      <div style={{ fontSize: 14, color: 'rgba(26,10,46,0.5)', marginTop: 6 }}>{label}</div>
+    </div>
+  )
+}
+
+function UserRow({ user, onDelete }) {
+  return (
+    <div 
+      style={{ 
+        display: 'grid', gridTemplateColumns: '48px 1fr 120px 100px', gap: 16, 
+        padding: '14px 20px', background: '#ffffff', border: '1px solid rgba(124,58,237,0.08)', 
+        borderRadius: 14, alignItems: 'center', transition: 'all 0.2s'
+      }}
+      onMouseEnter={e => {
+        e.currentTarget.style.borderColor = 'rgba(124,58,237,0.25)';
+        e.currentTarget.style.backgroundColor = '#fcfaff';
+        e.currentTarget.style.transform = 'translateX(2px)';
+      }}
+      onMouseLeave={e => {
+        e.currentTarget.style.borderColor = 'rgba(124,58,237,0.08)';
+        e.currentTarget.style.backgroundColor = '#ffffff';
+        e.currentTarget.style.transform = 'translateX(0)';
+      }}
+    >
+      <div style={{ 
+        width: 48, height: 48, borderRadius: '50%', background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', 
+        display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, 
+        fontWeight: 800, color: '#fff', boxShadow: '0 4px 8px rgba(124,58,237,0.2)'
+      }}>
+        {getInitials(user.name)}
+      </div>
+      <div>
+        <div style={{ fontSize: 15, fontWeight: 700, color: '#1a0a2e', marginBottom: 4 }}>{user.name}</div>
+        <div style={{ fontSize: 13, color: 'rgba(26,10,46,0.5)' }}>{user.email}</div>
+      </div>
+      <div>
+        <span style={{ 
+          padding: '4px 12px', borderRadius: 20, background: 'rgba(124,58,237,0.08)', 
+          color: '#7c3aed', fontSize: 12, fontWeight: 600, textTransform: 'capitalize' 
+        }}>
+          {user.role}
+        </span>
+      </div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button 
+          style={{ 
+            padding: '6px 14px', borderRadius: 8, border: '1px solid rgba(124,58,237,0.3)', 
+            background: 'none', color: '#7c3aed', fontSize: 12, fontWeight: 600, 
+            cursor: 'pointer', transition: 'all 0.2s'
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.background = '#7c3aed';
+            e.currentTarget.style.color = '#fff';
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.background = 'none';
+            e.currentTarget.style.color = '#7c3aed';
+          }}
+        >
+          Edit
+        </button>
+        <button 
+          onClick={() => onDelete(user._id)} 
+          style={{ 
+            padding: '6px 14px', borderRadius: 8, border: '1px solid rgba(239,68,68,0.3)', 
+            background: 'none', color: '#ef4444', fontSize: 12, fontWeight: 600, 
+            cursor: 'pointer', transition: 'all 0.2s'
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.background = '#ef4444';
+            e.currentTarget.style.color = '#fff';
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.background = 'none';
+            e.currentTarget.style.color = '#ef4444';
+          }}
+        >
+          Delete
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function PropertyRow({ prop, onDelete }) {
+  const navigate = useNavigate()
+  return (
+    <div 
+      style={{ 
+        display: 'grid', gridTemplateColumns: '80px 1fr 120px 120px', gap: 16, 
+        padding: '14px 20px', background: '#ffffff', border: '1px solid rgba(124,58,237,0.08)', 
+        borderRadius: 14, alignItems: 'center', transition: 'all 0.2s'
+      }}
+      onMouseEnter={e => {
+        e.currentTarget.style.borderColor = 'rgba(124,58,237,0.25)';
+        e.currentTarget.style.backgroundColor = '#fcfaff';
+        e.currentTarget.style.transform = 'translateX(2px)';
+      }}
+      onMouseLeave={e => {
+        e.currentTarget.style.borderColor = 'rgba(124,58,237,0.08)';
+        e.currentTarget.style.backgroundColor = '#ffffff';
+        e.currentTarget.style.transform = 'translateX(0)';
+      }}
+    >
+      <div style={{ 
+        width: 72, height: 60, borderRadius: 10, background: 'linear-gradient(135deg,#f0eeff,#e8e4ff)', 
+        overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', 
+        fontSize: 20, color: '#7c3aed'
+      }}>
+        {prop.images?.[0] ? (
+          <img src={prop.images[0]} alt={prop.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        ) : (
+          '🏠'
+        )}
+      </div>
+      <div>
+        <div style={{ fontSize: 15, fontWeight: 700, color: '#1a0a2e', marginBottom: 4 }}>{prop.title}</div>
+        <div style={{ fontSize: 13, color: 'rgba(26,10,46,0.5)' }}>{prop.city}</div>
+      </div>
+      <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 18, fontWeight: 800, color: '#1a0a2e' }}>
+        {formatPrice(prop.price)}
+      </div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button 
+          onClick={() => navigate(`/property/${prop._id}`)} 
+          style={{ 
+            padding: '6px 14px', borderRadius: 8, border: '1px solid rgba(124,58,237,0.3)', 
+            background: 'none', color: '#7c3aed', fontSize: 12, fontWeight: 600, 
+            cursor: 'pointer', transition: 'all 0.2s'
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.background = '#7c3aed';
+            e.currentTarget.style.color = '#fff';
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.background = 'none';
+            e.currentTarget.style.color = '#7c3aed';
+          }}
+        >
+          View
+        </button>
+        <button 
+          onClick={() => onDelete(prop._id)} 
+          style={{ 
+            padding: '6px 14px', borderRadius: 8, border: '1px solid rgba(239,68,68,0.3)', 
+            background: 'none', color: '#ef4444', fontSize: 12, fontWeight: 600, 
+            cursor: 'pointer', transition: 'all 0.2s'
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.background = '#ef4444';
+            e.currentTarget.style.color = '#fff';
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.background = 'none';
+            e.currentTarget.style.color = '#ef4444';
+          }}
+        >
+          Delete
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function EmptyState({ icon, title, sub }) {
+  return (
+    <div style={{ 
+      textAlign: 'center', padding: '60px 20px', background: '#fff', borderRadius: 20, 
+      border: '1px solid rgba(124,58,237,0.08)', transition: 'all 0.2s'
+    }}>
+      <div style={{ fontSize: 48, marginBottom: 16, opacity: 0.6 }}>{icon}</div>
+      <h3 style={{ fontFamily: "'Playfair Display',serif", fontSize: 20, fontWeight: 800, color: '#1a0a2e', marginBottom: 8 }}>
+        {title}
+      </h3>
+      <p style={{ color: 'rgba(26,10,46,0.5)', fontSize: 14 }}>{sub}</p>
+    </div>
+  )
+}
+
+export default function AdminDashboard() {
+  const { user, logout } = useAuth()
+  const navigate = useNavigate()
+  const [tab, setTab] = useState(0)
+  const [users, setUsers] = useState([])
+  const [properties, setProperties] = useState([])
+  const [inquiries, setInquiries] = useState([])
+  const [stats, setStats] = useState({})
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const [usersRes, propsRes, inquiriesRes] = await Promise.allSettled([
+          userService.getAllUsers?.() || Promise.resolve({ data: [] }),
+          propertyService.getAll({ limit: 100 }),
+          inquiryService.getAll?.() || Promise.resolve({ data: [] })
+        ])
+        if (usersRes.status === 'fulfilled') setUsers(usersRes.value.data || [])
+        if (propsRes.status === 'fulfilled') setProperties(propsRes.value.data || [])
+        if (inquiriesRes.status === 'fulfilled') setInquiries(inquiriesRes.value.data || [])
+        setStats({
+          totalUsers: usersRes.value?.data?.length || 0,
+          totalProperties: propsRes.value?.data?.length || 0,
+          totalInquiries: inquiriesRes.value?.data?.length || 0,
+        })
+      } catch (error) {
+        toast.error('Failed to load dashboard data')
+      } finally {
+        setLoading(false)
+      }
+    })()
+  }, [])
+
+  const handleDeleteUser = async (id) => {
+    if (!window.confirm('Delete user?')) return
+    try {
+      await userService.deleteUser?.(id)
+      setUsers(users.filter(u => u._id !== id))
+      toast.success('User deleted')
+    } catch {
+      toast.error('Failed to delete')
+    }
+  }
+
+  const handleDeleteProperty = async (id) => {
+    if (!window.confirm('Delete property?')) return
+    try {
+      await propertyService.delete(id)
+      setProperties(properties.filter(p => p._id !== id))
+      toast.success('Property deleted')
+    } catch {
+      toast.error('Failed to delete')
+    }
+  }
+
+  const tabContent = [
+    // Overview (unchanged)
+    <div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(240px,1fr))', gap: 20, marginBottom: 32 }}>
+        <StatCard icon="👥" label="Total Users" value={stats.totalUsers} change="+12%" />
+        <StatCard icon="🏘" label="Properties" value={stats.totalProperties} change="+8%" />
+        <StatCard icon="💬" label="Inquiries" value={stats.totalInquiries} change="+5%" />
+        <StatCard icon="💰" label="Revenue" value="₹24.5L" change="+15%" />
+      </div>
+    </div>,
+
+    // Users (unchanged)
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <span style={{ fontSize: 18, fontWeight: 700, color: '#1a0a2e' }}>{users.length} Users</span>
+      </div>
+      {users.length === 0 ? (
+        <EmptyState icon="👥" title="No users" sub="Users will appear here" />
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {users.map(u => <UserRow key={u._id} user={u} onDelete={handleDeleteUser} />)}
+        </div>
+      )}
+    </div>,
+
+    // Properties (unchanged)
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <span style={{ fontSize: 18, fontWeight: 700, color: '#1a0a2e' }}>{properties.length} Properties</span>
+      </div>
+      {properties.length === 0 ? (
+        <EmptyState icon="🏘" title="No properties" sub="Properties will appear here" />
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {properties.map(p => <PropertyRow key={p._id} prop={p} onDelete={handleDeleteProperty} />)}
+        </div>
+      )}
+    </div>,
+
+    // Inquiries (unchanged)
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <span style={{ fontSize: 18, fontWeight: 700, color: '#1a0a2e' }}>{inquiries.length} Inquiries</span>
+      </div>
+      {inquiries.length === 0 ? (
+        <EmptyState icon="💬" title="No inquiries" sub="Inquiries from users will appear here" />
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {inquiries.map(inq => (
+            <div 
+              key={inq._id} 
+              style={{ 
+                padding: 16, background: '#ffffff', border: '1px solid rgba(124,58,237,0.08)', 
+                borderRadius: 14, transition: 'all 0.2s'
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.borderColor = 'rgba(124,58,237,0.25)';
+                e.currentTarget.style.backgroundColor = '#fcfaff';
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.borderColor = 'rgba(124,58,237,0.08)';
+                e.currentTarget.style.backgroundColor = '#ffffff';
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                <div style={{ fontSize: 15, fontWeight: 700, color: '#1a0a2e' }}>{inq.user?.name || 'User'}</div>
+                <span style={{ fontSize: 12, color: 'rgba(26,10,46,0.4)' }}>{timeAgo(inq.createdAt)}</span>
+              </div>
+              <div style={{ fontSize: 13, color: 'rgba(26,10,46,0.5)', marginBottom: 8 }}>
+                Property: <span style={{ fontWeight: 500, color: '#7c3aed' }}>{inq.property?.title}</span>
+              </div>
+              <p style={{ fontSize: 13, color: 'rgba(26,10,46,0.7)', lineHeight: 1.5, margin: 0 }}>
+                {inq.message}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>,
+
+    // Reports – now with real data (replaces placeholder)
+    <div>
+      {/* Key metrics */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(240px,1fr))', gap: 20, marginBottom: 32 }}>
+        <StatCard icon="🏘" label="Total Properties" value={stats.totalProperties} />
+        <StatCard icon="👥" label="Total Users" value={stats.totalUsers} />
+        <StatCard icon="💬" label="Total Inquiries" value={stats.totalInquiries} />
+        <StatCard icon="📈" label="Avg. Properties per User" value={stats.totalUsers ? (stats.totalProperties / stats.totalUsers).toFixed(1) : 0} />
+      </div>
+
+      {/* Charts row 1 */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 32 }}>
+        <div style={{ background: '#ffffff', borderRadius: 16, border: '1px solid rgba(124,58,237,0.1)', padding: 20 }}>
+          <h3 style={{ fontFamily: "'Playfair Display',serif", fontSize: 18, fontWeight: 700, color: '#1a0a2e', marginBottom: 16 }}>Properties Added (Last 6 Months)</h3>
+          <PropertyTrendChart properties={properties} />
+        </div>
+        <div style={{ background: '#ffffff', borderRadius: 16, border: '1px solid rgba(124,58,237,0.1)', padding: 20 }}>
+          <h3 style={{ fontFamily: "'Playfair Display',serif", fontSize: 18, fontWeight: 700, color: '#1a0a2e', marginBottom: 16 }}>Inquiries by Property Type</h3>
+          <InquiryByTypeChart properties={properties} inquiries={inquiries} />
+        </div>
+      </div>
+
+      {/* Charts row 2 */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 32 }}>
+        <div style={{ background: '#ffffff', borderRadius: 16, border: '1px solid rgba(124,58,237,0.1)', padding: 20 }}>
+          <h3 style={{ fontFamily: "'Playfair Display',serif", fontSize: 18, fontWeight: 700, color: '#1a0a2e', marginBottom: 16 }}>User Role Distribution</h3>
+          <RolePieChart users={users} />
+        </div>
+        <div style={{ background: '#ffffff', borderRadius: 16, border: '1px solid rgba(124,58,237,0.1)', padding: 20 }}>
+          <h3 style={{ fontFamily: "'Playfair Display',serif", fontSize: 18, fontWeight: 700, color: '#1a0a2e', marginBottom: 16 }}>Top 5 Properties (Most Inquiries)</h3>
+          <TopPropertiesTable properties={properties} inquiries={inquiries} />
+        </div>
+      </div>
+    </div>,
+  ]
+
+  return (
+    <div style={{ minHeight: '100vh', background: '#f8f7ff', fontFamily: "'DM Sans',sans-serif", color: '#1a0a2e' }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@700;800&display=swap');
+        *{box-sizing:border-box;}
+        @media(max-width:768px){.admin-header-row{flex-direction:column!important;gap:16px!important;}}
+      `}</style>
+
+      <div style={{ background: '#ffffff', backdropFilter: 'blur(20px)', borderBottom: '1px solid rgba(124,58,237,0.1)', padding: '20px 6vw', position: 'sticky', top: 0, zIndex: 10 }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+          <div className="admin-header-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+              <div style={{ 
+                width: 56, height: 56, borderRadius: '50%', background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', 
+                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, 
+                fontWeight: 800, color: '#fff', boxShadow: '0 6px 20px rgba(124,58,237,0.25)'
+              }}>
+                {getInitials(user?.name || 'Admin')}
+              </div>
+              <div>
+                <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 22, fontWeight: 800, color: '#1a0a2e' }}>
+                  Admin Dashboard
+                </div>
+                <div style={{ fontSize: 13, color: 'rgba(26,10,46,0.5)', marginTop: 2 }}>
+                  {user?.email} · <span style={{ color: '#7c3aed', fontWeight: 600, textTransform: 'capitalize' }}>{user?.role}</span>
+                </div>
+              </div>
+            </div>
+            <div>
+              <button 
+                onClick={logout} 
+                style={{ 
+                  padding: '10px 20px', background: 'rgba(124,58,237,0.08)', border: '1px solid rgba(124,58,237,0.2)', 
+                  borderRadius: 40, color: '#7c3aed', fontSize: 14, fontWeight: 600, cursor: 'pointer', 
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.background = '#7c3aed';
+                  e.currentTarget.style.color = '#fff';
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.background = 'rgba(124,58,237,0.08)';
+                  e.currentTarget.style.color = '#7c3aed';
+                }}
+              >
+                Logout
+              </button>
+            </div>
+          </div>
+
+          {/* Tabs */}
+          <div style={{ display: 'flex', gap: 6, overflowX: 'auto', scrollbarWidth: 'none' }}>
+            {TABS.map((t, i) => (
+              <button 
+                key={t} 
+                onClick={() => setTab(i)}
+                style={{ 
+                  padding: '10px 22px', borderRadius: 40, border: 'none', fontSize: 14, fontWeight: 600, 
+                  cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: "'DM Sans',sans-serif", transition: 'all 0.2s',
+                  background: tab === i ? 'linear-gradient(135deg,#7c3aed,#6d28d9)' : 'rgba(124,58,237,0.08)',
+                  color: tab === i ? '#fff' : '#7c3aed',
+                }}
+                onMouseEnter={e => {
+                  if (tab !== i) e.currentTarget.style.background = 'rgba(124,58,237,0.15)';
+                }}
+                onMouseLeave={e => {
+                  if (tab !== i) e.currentTarget.style.background = 'rgba(124,58,237,0.08)';
+                }}
+              >
+                {t}
+                {i === 0 && stats.totalUsers > 0 && (
+                  <span style={{ marginLeft: 6, background: tab === i ? '#fff' : '#7c3aed', color: tab === i ? '#7c3aed' : '#fff', borderRadius: 20, padding: '0 6px', fontSize: 11 }}>
+                    {stats.totalUsers}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '32px 6vw 64px' }}>
+        {loading ? (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(180px,1fr))', gap: 20 }}>
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} style={{ height: 120, background: '#f0eeff', borderRadius: 16, animation: 'pulse 1.5s infinite' }} />
+            ))}
+          </div>
+        ) : (
+          tabContent[tab]
+        )}
+      </div>
+      <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.6}}`}</style>
+    </div>
+  )
+}

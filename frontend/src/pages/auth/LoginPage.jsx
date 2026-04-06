@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
-import { handleGoogleLogin } from "../utils/authUtils";
- 
-const LOGIN_API_URL = "https://node5.onrender.com/user/login";
+import { handleGoogleLogin } from "../../utils/authUtils";
+import { useAuth } from '../../context/AuthContext'; 
+
 
 const styles = {
   wrap: { minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(135deg, #1a0f0f 0%, #2d1810 50%, #3d1f10 100%)", padding: "20px" },
@@ -31,6 +31,8 @@ export default function LoginPage() {
   const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState({});
+  const { login } = useAuth();
+  const navigate = useNavigate();
 
   const validate = () => {
     const e = {};
@@ -45,26 +47,40 @@ export default function LoginPage() {
     e.preventDefault();
     if (!validate()) return;
     setLoading(true);
-    try {
-      const res = await fetch(LOGIN_API_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        toast.success("Login successful!");
-        if (data.token) localStorage.setItem("token", data.token);
-      } else {
-        toast.error(data.message || "Login failed");
-      }
-    } catch {
-      toast.error("Network error");
-    } finally {
-      setLoading(false);
-    }
-  };
 
+  //   try {
+  //     const res = await fetch(LOGIN_API_URL, {
+  //       method: "POST",
+  //       headers: { "Content-Type": "application/json" },
+  //       body: JSON.stringify({ email, password }),
+  //     });
+  //     const data = await res.json();
+  //     if (res.ok) {
+  //       toast.success("Login successful!");
+  //       if (data.token) localStorage.setItem("token", data.token);
+  //     } else {
+  //       toast.error(data.message || "Login failed");
+  //     }
+  //   } catch {
+  //     toast.error("Network error");
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
+
+  // REPLACED: direct fetch → context login
+ const result = await login({ email, password });
+if (result.success) {
+  toast.success("Login successful!");
+  const role = result.role;
+  if (role === 'admin') navigate('/admin');
+  else if (role === 'agent') navigate('/dashboard/agent');
+  else if (role === 'owner') navigate('/dashboard/owner');
+  else if (role === 'support') navigate('/support');
+  else navigate('/');
+}
+    setLoading(false);
+  };
   return (
     <>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}.btn:hover{transform:translateY(-2px);box-shadow:0 10px 30px rgba(249,115,22,0.4)}.input::placeholder{color:rgba(255,255,255,0.4)}.input:focus{border-color:#f97316;background:rgba(255,255,255,0.1)}`}</style>
@@ -85,10 +101,10 @@ export default function LoginPage() {
               <button style={styles.toggle} type="button" onClick={() => setShowPwd(!showPwd)}>{showPwd ? "👁️" : "👁️‍🗨️"}</button>
             </div>
             {err.password && <div style={styles.err}>{err.password}</div>}
-            <button style={styles.btn} type="submit" disabled={loading}>{loading ? "Signing in..." : "Login"}</button>
+            <button style={styles.btn} type="submit" disabled={loading}>{loading ? "Login in..." : "Login"}</button>
           </form>
           <div style={styles.div}><span style={styles.line}></span><span style={styles.or}>or</span><span style={styles.line}></span></div>
-          <button style={styles.ggBtn} onClick={() => handleGoogleLogin(toast)}>🔵 Continue with Google</button>
+          <button style={styles.ggBtn} onClick={() => handleGoogleLogin(toast)}> Continue with Google</button>
           <p style={styles.link}>Don't have an account? <Link to="/signup" style={styles.a}>Sign Up</Link></p>
         </div>
       </div>
