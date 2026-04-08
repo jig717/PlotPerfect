@@ -5,6 +5,8 @@
   import { inquiryService, supportService } from '../../services'
   import { timeAgo, getInitials } from '../../utils/index'
   import { toast } from 'react-toastify'
+  import NotificationBell from '../../Components/ui/NotificationBell'
+  import ThreadPanel from '../../Components/messaging/ThreadPanel'
 
 
   const TABS = ['Tickets', 'Inquiries']
@@ -125,7 +127,7 @@
   /* ────────────────────────────────────────
     INQUIRY CARD
   ──────────────────────────────────────── */
-  function InquiryCard({ inquiry }) {
+  function InquiryCard({ inquiry, onOpenConversation }) {
     return (
       <div style={{
         background: '#fff',
@@ -166,6 +168,14 @@
             🏠 {inquiry.property?.title || 'Property'}
           </div>
         )}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
+          <button
+            onClick={() => onOpenConversation?.(inquiry)}
+            style={{ padding: '7px 12px', borderRadius: 8, border: '1px solid rgba(124,58,237,0.28)', background: '#fff', color: '#7c3aed', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+          >
+            Open Chat
+          </button>
+        </div>
       </div>
     )
   }
@@ -224,6 +234,8 @@
     const [tab,setTab]       = useState(0)
     const [tickets, setTickets]   = useState([])
     const [inquiries, setInquiries] = useState([])
+    const [inquirySearch, setInquirySearch] = useState('')
+    const [activeInquiry, setActiveInquiry] = useState(null)
     const [loading, setLoading]   = useState(true)
 
     const loadData = useCallback(async () => {
@@ -305,6 +317,15 @@
     const openCount     = tickets.filter(t => t.status === 'Open').length
     const inProgCount   = tickets.filter(t => t.status === 'In Progress').length
     const resolvedCount = tickets.filter(t => t.status === 'Resolved').length
+    const filteredInquiries = inquiries
+      .slice()
+      .sort((a, b) => new Date(b?.createdAt || 0) - new Date(a?.createdAt || 0))
+      .filter((inquiry) => {
+        const keyword = inquirySearch.trim().toLowerCase()
+        if (!keyword) return true
+        const name = String(inquiry?.name || inquiry?.user?.name || inquiry?.user?.username || '').toLowerCase()
+        return name.includes(keyword)
+      })
 
     const tabContent = [
       /* ── TICKETS TAB ── */
@@ -339,6 +360,13 @@
             {inquiries.length} Total Inquiries
           </span>
         </div>
+        <input
+          type="text"
+          value={inquirySearch}
+          onChange={(event) => setInquirySearch(event.target.value)}
+          placeholder="Search by sender name..."
+          style={{ width: '100%', maxWidth: 320, height: 36, borderRadius: 10, border: '1px solid rgba(124,58,237,0.2)', background: '#faf8ff', color: '#1a0a2e', padding: '0 12px', fontSize: 13, marginBottom: 14, outline: 'none' }}
+        />
 
         {loading ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -348,8 +376,8 @@
           <EmptyState icon="💬" title="No inquiries yet" sub="Property inquiries will appear here"/>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {inquiries.map(i => (
-              <InquiryCard key={i._id} inquiry={i}/>
+            {filteredInquiries.map(i => (
+              <InquiryCard key={i._id} inquiry={i} onOpenConversation={setActiveInquiry} />
             ))}
           </div>
         )}
@@ -390,6 +418,7 @@
 
       {/* Right — actions */}
               <div style={{ display: 'flex', gap: 8 }}>
+    <NotificationBell user={user} />
     {/* create button */}
     <button
       onClick={() => navigate('/support/create')}
@@ -471,6 +500,9 @@
         <div style={{ maxWidth: 1100, margin: '0 auto', padding: '32px 6vw 60px' }}>
           {tabContent[tab]}
         </div>
+        {activeInquiry && (
+          <ThreadPanel inquiry={activeInquiry} user={user} onClose={() => setActiveInquiry(null)} />
+        )}
       </div>
     )
   }

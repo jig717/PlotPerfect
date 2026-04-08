@@ -4,6 +4,8 @@ import { useAuth } from '../../context/AuthContext'
 import { userService, propertyService, inquiryService } from '../../services'
 import { formatPrice, timeAgo, getInitials } from '../../utils/index'
 import { toast } from 'react-toastify'
+import NotificationBell from '../../Components/ui/NotificationBell'
+import ThreadPanel from '../../Components/messaging/ThreadPanel'
 // Chart.js imports – added for Reports tab
 import { Bar, Pie } from 'react-chartjs-2'
 import {
@@ -422,6 +424,8 @@ export default function AdminDashboard() {
   const [users, setUsers] = useState([])
   const [properties, setProperties] = useState([])
   const [inquiries, setInquiries] = useState([])
+  const [inquirySearch, setInquirySearch] = useState('')
+  const [activeInquiry, setActiveInquiry] = useState(null)
   const [stats, setStats] = useState({})
   const [loading, setLoading] = useState(true)
 
@@ -471,6 +475,16 @@ export default function AdminDashboard() {
     }
   }
 
+  const filteredInquiries = inquiries
+    .slice()
+    .sort((a, b) => new Date(b?.createdAt || 0) - new Date(a?.createdAt || 0))
+    .filter((inq) => {
+      const keyword = inquirySearch.trim().toLowerCase()
+      if (!keyword) return true
+      const name = String(inq?.user?.name || inq?.name || '').toLowerCase()
+      return name.includes(keyword)
+    })
+
   const tabContent = [
     // Overview (unchanged)
     <div>
@@ -515,11 +529,18 @@ export default function AdminDashboard() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <span style={{ fontSize: 18, fontWeight: 700, color: '#1a0a2e' }}>{inquiries.length} Inquiries</span>
       </div>
+      <input
+        type="text"
+        value={inquirySearch}
+        onChange={(event) => setInquirySearch(event.target.value)}
+        placeholder="Search by sender name..."
+        style={{ width: '100%', maxWidth: 320, height: 36, borderRadius: 10, border: '1px solid rgba(124,58,237,0.2)', background: '#faf8ff', color: '#1a0a2e', padding: '0 12px', fontSize: 13, marginBottom: 14, outline: 'none' }}
+      />
       {inquiries.length === 0 ? (
         <EmptyState icon="💬" title="No inquiries" sub="Inquiries from users will appear here" />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {inquiries.map(inq => (
+          {filteredInquiries.map(inq => (
             <div 
               key={inq._id} 
               style={{ 
@@ -545,6 +566,23 @@ export default function AdminDashboard() {
               <p style={{ fontSize: 13, color: 'rgba(26,10,46,0.7)', lineHeight: 1.5, margin: 0 }}>
                 {inq.message}
               </p>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
+                <button
+                  onClick={() => setActiveInquiry(inq)}
+                  style={{
+                    padding: '7px 14px',
+                    borderRadius: 8,
+                    border: '1px solid rgba(124,58,237,0.28)',
+                    background: 'rgba(124,58,237,0.08)',
+                    color: '#7c3aed',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Open Chat
+                </button>
+              </div>
             </div>
           ))}
         </div>
@@ -615,7 +653,8 @@ export default function AdminDashboard() {
                 </div>
               </div>
             </div>
-            <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <NotificationBell user={user} />
               <button 
                 onClick={logout} 
                 style={{ 
@@ -679,6 +718,13 @@ export default function AdminDashboard() {
           tabContent[tab]
         )}
       </div>
+      {activeInquiry && (
+        <ThreadPanel
+          inquiry={activeInquiry}
+          user={user}
+          onClose={() => setActiveInquiry(null)}
+        />
+      )}
       <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.6}}`}</style>
     </div>
   )

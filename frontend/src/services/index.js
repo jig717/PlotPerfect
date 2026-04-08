@@ -2,7 +2,7 @@ import api from './api'
 
 export const authService = {
   login: data => api.post('/user/login', data),
-  signup: data => api.post('/user/signup', data),
+  signup: data => api.post('/user/register', data),
   me:() => api.get('/user/me'),
 }
 
@@ -13,6 +13,17 @@ export const inquiryService = {
   delete: id => api.delete(`/inquiries/${id}`),           
   respond: (id, msg) => api.patch(`/inquiries/${id}/respond`, { message: msg }),
   getForAgent: () => api.get('/inquiries/agent'),         
+};
+
+export const threadService = {
+  create: data => api.post('/threads', data),
+  getMine: params => api.get('/threads', { params }),
+  getById: id => api.get(`/threads/${id}`),
+  getByInquiryId: inquiryId => api.get(`/threads/inquiry/${inquiryId}`),
+  getMessages: (threadId) => api.get(`/threads/${threadId}/messages`),
+  sendMessage: (threadId, payload) => api.post(`/threads/${threadId}/messages`, payload),
+  markRead: (threadId) => api.post(`/threads/${threadId}/read`),
+  update: (threadId, payload) => api.patch(`/threads/${threadId}`, payload),
 };
 export const propertyService = {
   getAll: params => api.get('/property/all', { params }),
@@ -32,12 +43,13 @@ export const userService = {
   getProfile: () => api.get('/user/profile'),
   updateProfile: data => api.put('/user/profile', data),
   getSaved: (userId) => api.get(`/favorite/${userId}`),      
-  saveProperty: (userId, propertyId) => api.post('/favorite', { user: userId, property: propertyId }),
+  saveProperty: (userId, propertyId) => api.post('/favorite', { userId, propertyId }),
   unsave: (favoriteId) => api.delete(`/favorite/${favoriteId}`),
-  getVisits: () => api.get('/visit'),
+  getVisits: (params) => api.get('/visits/buyer', { params }),
+  cancelVisit: (visitId) => api.patch(`/visits/${visitId}/status`, { status: 'CANCELLED' }),
 };
 
-export const agentService = {
+export const agentService = { 
   getStats: () => api.get('/agent/stats'),
   getDailyViews: () => api.get('/agent/daily-views'),
   getLeadSources: () => api.get('/agent/lead-sources'),

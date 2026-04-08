@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { agentService, propertyService, inquiryService } from '../../services'
+import { agentService, propertyService, inquiryService, threadService } from '../../services'
 import { useAuth } from '../../context/AuthContext'
 import { formatPrice, timeAgo, getInitials } from '../../utils/index'
 import { toast } from 'react-toastify'
@@ -17,6 +17,9 @@ import {
   ArcElement,
   Filler 
 } from 'chart.js'
+import visitService from '../../services/visitService'   
+import ThreadPanel from '../../Components/messaging/ThreadPanel'
+import NotificationBell from '../../Components/ui/NotificationBell'
 
 ChartJS.register(
   CategoryScale,
@@ -30,7 +33,33 @@ ChartJS.register(
   Filler
 )
 
-const TABS = ['Overview','My Listings','Leads','Analytics']
+//  added 'Visit Requests' tab
+const TABS = ['Overview','My Listings','Leads','Analytics','Visit Requests']
+
+const extractVisitsList = (payload) => {
+  if (Array.isArray(payload)) return payload
+  if (Array.isArray(payload?.visits)) return payload.visits
+  if (Array.isArray(payload?.data)) return payload.data
+  return []
+}
+
+const getVisitStatus = (visit) => visit?.status || visit?.visit_status || 'REQUESTED'
+
+const getVisitDate = (visit) => visit?.scheduledDate || visit?.scheduled_date || null
+
+const getVisitPropertyId = (visit) =>
+  visit?.property?._id || visit?.propertyId || visit?.property_id || visit?.property || null
+
+const getVisitBuyer = (visit) => visit?.buyer || visit?.user || visit?.buyerInfo || null
+
+const extractThreads = (payload) => {
+  if (Array.isArray(payload)) return payload
+  if (Array.isArray(payload?.data)) return payload.data
+  return []
+}
+
+const getParticipantUserId = (participant) =>
+  participant?.user?._id || participant?.user || null
 
 /* ── Stat Card (light mode) ── */
 function StatCard({ icon, label, value, change, up=true }) {
@@ -83,7 +112,7 @@ function ListingRow({ prop, onDelete }) {
 }
 
 /* ── Lead Card ── */
-function LeadCard({ lead, onRespond }) {
+function LeadCard({ lead, onRespond, onOpenConversation }) {
   const [replying, setReplying] = useState(false)
   const [reply, setReply] = useState('')
   const [loading, setLoading] = useState(false)
@@ -131,8 +160,16 @@ function LeadCard({ lead, onRespond }) {
               <button onClick={handleRespond} disabled={loading} style={{ padding:'0 14px', background:'linear-gradient(135deg,#7c3aed,#6d28d9)', border:'none', borderRadius:8, color:'#fff', fontSize:13, fontWeight:600, cursor:'pointer', opacity:loading?0.7:1 }}>{loading?'…':'Send'}</button>
               <button onClick={()=>setReplying(false)} style={{ padding:'0 10px', background:'none', border:'0.5px solid rgba(124,58,237,0.2)', borderRadius:8, color:'rgba(26,10,46,0.5)', cursor:'pointer' }}>✕</button>
             </div>
-          : <button onClick={()=>setReplying(true)} style={{ padding:'7px 14px', background:'rgba(124,58,237,0.08)', border:'0.5px solid rgba(124,58,237,0.3)', borderRadius:8, color:'#7c3aed', fontSize:13, fontWeight:600, cursor:'pointer' }}>↩ Reply</button>
+          : <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+              <button onClick={()=>setReplying(true)} style={{ padding:'7px 14px', background:'rgba(124,58,237,0.08)', border:'0.5px solid rgba(124,58,237,0.3)', borderRadius:8, color:'#7c3aed', fontSize:13, fontWeight:600, cursor:'pointer' }}>↩ Reply</button>
+              <button onClick={() => onOpenConversation?.(lead)} style={{ padding:'7px 14px', background:'#ffffff', border:'0.5px solid rgba(124,58,237,0.2)', borderRadius:8, color:'#1a0a2e', fontSize:13, fontWeight:600, cursor:'pointer' }}>Open Thread</button>
+            </div>
       }
+      {(lead.response || replying) && (
+        <div style={{ display:'flex', justifyContent:'flex-end', marginTop:12 }}>
+          <button onClick={() => onOpenConversation?.(lead)} style={{ padding:'7px 14px', background:'#ffffff', border:'0.5px solid rgba(124,58,237,0.2)', borderRadius:8, color:'#1a0a2e', fontSize:13, fontWeight:600, cursor:'pointer' }}>Open Thread</button>
+        </div>
+      )}
     </div>
   )
 }
@@ -211,15 +248,12 @@ function PieChart({ data, labels }) {
 function Overview({ stats, listings, leads, dailyViews, leadSources }) {
   const navigate = useNavigate()
 
-  // Prepare line chart data from dailyViews array
   const viewLabels = dailyViews.length > 0 ? dailyViews.map(d => d.date.slice(5)) : []
   const viewData = dailyViews.length > 0 ? dailyViews.map(d => d.views) : []
 
-  // Prepare pie chart data from leadSources object
   const leadLabels = Object.keys(leadSources).length > 0 ? Object.keys(leadSources) : []
   const leadData = Object.keys(leadSources).length > 0 ? Object.values(leadSources) : []
 
-  // Use fallback empty arrays if no data
   const finalLeadLabels = leadLabels.length ? leadLabels : ['No data']
   const finalLeadData = leadData.length ? leadData : [1]
 
@@ -232,7 +266,6 @@ function Overview({ stats, listings, leads, dailyViews, leadSources }) {
         <StatCard icon="⏱️" label="Avg Response Time" value={stats.avgResponseTime  || '1.5h'} change="-30m" up/>
       </div>
 
-      {/* Charts row */}
       <div className="charts-row" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:24, marginBottom:32 }}>
         <div style={{ background:'#ffffff', border:'0.5px solid rgba(124,58,237,0.15)', borderRadius:14, padding:20 }}>
           <h3 style={{ fontFamily:"'Playfair Display',serif", fontSize:16, fontWeight:700, color:'#1a0a2e', marginBottom:16 }}>Views Trend (Last 7 Days)</h3>
@@ -252,7 +285,6 @@ function Overview({ stats, listings, leads, dailyViews, leadSources }) {
         </div>
       </div>
 
-      {/* Recent listings */}
       {listings.length > 0 && (
         <div style={{ marginBottom:24 }}>
           <div style={{ fontSize:15, fontWeight:700, color:'#1a0a2e', marginBottom:14 }}>Recent Listings</div>
@@ -270,17 +302,140 @@ function Overview({ stats, listings, leads, dailyViews, leadSources }) {
   )
 }
 
-/* ── Main AgentDashboard (with real data) ── */
+/* ── Agent Visit Card (for the new tab) ── */
+function AgentVisitCard({ visit, onStatusChange, updating }) {
+  const visitStatus = getVisitStatus(visit)
+  const visitDate = getVisitDate(visit)
+  const d = visitDate ? new Date(visitDate) : null
+  const buyer = getVisitBuyer(visit)
+  const propertyCity = visit.property?.location?.city || visit.property?.city || 'Location not specified'
+  const propertyAddress = visit.property?.location?.address || visit.property?.locality || ''
+  const statusColors = {
+    REQUESTED: { bg: 'rgba(124,58,237,0.08)', color: '#7c3aed', label: 'Pending' },
+    CONFIRMED: { bg: 'rgba(34,197,94,0.1)', color: '#16a34a', label: 'Confirmed' },
+    CANCELLED: { bg: 'rgba(239,68,68,0.1)', color: '#dc2626', label: 'Cancelled' },
+    COMPLETED: { bg: 'rgba(59,130,246,0.1)', color: '#2563eb', label: 'Completed' },
+  }
+  const style = statusColors[visitStatus] || statusColors.REQUESTED
+
+  return (
+    <div style={{ padding:16, background:'#ffffff', border:'0.5px solid rgba(124,58,237,0.15)', borderRadius:14 }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'start', flexWrap:'wrap', gap:12 }}>
+        <div>
+          <h3 style={{ fontSize:16, fontWeight:700, color:'#1a0a2e', marginBottom:4 }}>{visit.property?.title || 'Property Visit'}</h3>
+          <p style={{ fontSize:13, color:'rgba(26,10,46,0.6)' }}>
+            📍 {propertyCity}{propertyAddress ? ` · ${propertyAddress}` : ''}
+          </p>
+          {d && (
+            <p style={{ fontSize:13, marginTop:6 }}>
+              📅 {d.toLocaleDateString('en-IN', { weekday:'short', day:'numeric', month:'short', year:'numeric' })}
+              {' at '}
+              {d.toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit' })}
+            </p>
+          )}
+          <p style={{ fontSize:13, color:'rgba(26,10,46,0.6)', marginTop:4 }}>
+            👤 Buyer: {buyer?.name || buyer?.username || visit.buyer_name || 'Buyer'}{buyer?.email ? ` (${buyer.email})` : ''}
+          </p>
+          {visit.notes && (
+            <p style={{ fontSize:12, fontStyle:'italic', color:'rgba(26,10,46,0.5)', marginTop:6 }}>📝 {visit.notes}</p>
+          )}
+        </div>
+        <div style={{ textAlign:'right' }}>
+          <span style={{ display:'inline-block', padding:'4px 12px', borderRadius:20, fontSize:12, fontWeight:600, background:style.bg, color:style.color }}>
+            {style.label}
+          </span>
+          {visitStatus === 'REQUESTED' && (
+            <div style={{ marginTop:12, display:'flex', gap:8 }}>
+              <button
+                onClick={() => onStatusChange(visit._id, 'CONFIRMED')}
+                disabled={updating === visit._id}
+                style={{ padding:'6px 14px', background:'#16a34a', border:'none', borderRadius:8, color:'#fff', fontSize:12, fontWeight:600, cursor:'pointer' }}
+              >
+                Confirm
+              </button>
+              <button
+                onClick={() => onStatusChange(visit._id, 'CANCELLED')}
+                disabled={updating === visit._id}
+                style={{ padding:'6px 14px', background:'#dc2626', border:'none', borderRadius:8, color:'#fff', fontSize:12, fontWeight:600, cursor:'pointer' }}
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+          {visitStatus === 'CONFIRMED' && (
+            <button
+              onClick={() => onStatusChange(visit._id, 'COMPLETED')}
+              disabled={updating === visit._id}
+              style={{ marginTop:12, padding:'6px 14px', background:'#2563eb', border:'none', borderRadius:8, color:'#fff', fontSize:12, fontWeight:600, cursor:'pointer' }}
+            >
+              Mark Completed
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ── Main AgentDashboard ── */
 export default function AgentDashboard() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const [tab, setTab] = useState(0)
   const [listings, setListings] = useState([])
   const [leads, setLeads] = useState([])
+  const [leadSearch, setLeadSearch] = useState('')
+  const [activeLead, setActiveLead] = useState(null)
   const [stats, setStats] = useState({})
   const [dailyViews, setDailyViews] = useState([])
   const [leadSources, setLeadSources] = useState({})
   const [loading, setLoading] = useState(true)
+
+  // NEW: state for visits
+  const [visits, setVisits] = useState([])
+  const [visitsLoading, setVisitsLoading] = useState(false)
+  const [updatingVisitId, setUpdatingVisitId] = useState(null)
+  const threadNotificationRef = useRef({})
+  const threadPollBootstrappedRef = useRef(false)
+  const inquiryNotificationRef = useRef({})
+  const inquiryPollBootstrappedRef = useRef(false)
+
+  // Fetch agent's visits
+  const fetchAgentVisits = async (agentListings = listings) => {
+    setVisitsLoading(true)
+    try {
+      const res = await visitService.getAgentVisits({ limit: 100 })
+      const visitList = extractVisitsList(res)
+      const listingIds = new Set(
+        (Array.isArray(agentListings) ? agentListings : [])
+          .map((listing) => listing?._id || listing?.id)
+          .filter(Boolean)
+      )
+      const filteredVisits = listingIds.size
+        ? visitList.filter((visit) => listingIds.has(getVisitPropertyId(visit)))
+        : visitList
+      setVisits(filteredVisits)
+    } catch (err) {
+      console.error('Failed to fetch visits:', err)
+      toast.error('Could not load visit requests')
+    } finally {
+      setVisitsLoading(false)
+    }
+  }
+
+  // Update visit status (confirm/cancel/complete)
+  const handleVisitStatus = async (visitId, newStatus) => {
+    setUpdatingVisitId(visitId)
+    try {
+      await visitService.updateStatus(visitId, newStatus)
+      toast.success(`Visit ${newStatus.toLowerCase()} successfully`)
+      setVisits(prev => prev.map(v => v._id === visitId ? { ...v, status: newStatus, visit_status: newStatus } : v))
+    } catch {
+      toast.error('Failed to update status')
+    } finally {
+      setUpdatingVisitId(null)
+    }
+  }
 
   useEffect(() => {
     if (!user) return
@@ -294,15 +449,15 @@ export default function AgentDashboard() {
           agentService.getLeadSources(),
         ])
 
-        // Process properties
         if (propsRes.status === 'fulfilled') {
           const listingsData = propsRes.value.data || []
           setListings(listingsData)
+          await fetchAgentVisits(listingsData)
         } else {
           console.error('Failed to fetch listings:', propsRes.reason)
+          await fetchAgentVisits([])
         }
 
-        // Process leads (inquiries)
         if (inquiriesRes.status === 'fulfilled') {
           const leadsData = inquiriesRes.value.data || []
           setLeads(leadsData)
@@ -310,7 +465,6 @@ export default function AgentDashboard() {
           console.error('Failed to fetch leads:', inquiriesRes.reason)
         }
 
-        // Process stats
         if (statsRes.status === 'fulfilled') {
           const statsData = statsRes.value
           setStats({
@@ -325,14 +479,12 @@ export default function AgentDashboard() {
           console.error('Failed to fetch stats:', statsRes.reason)
         }
 
-        // Process daily views
         if (dailyRes.status === 'fulfilled') {
           setDailyViews(dailyRes.value || [])
         } else {
           console.error('Failed to fetch daily views:', dailyRes.reason)
         }
 
-        // Process lead sources
         if (leadRes.status === 'fulfilled') {
           setLeadSources(leadRes.value || {})
         } else {
@@ -346,7 +498,103 @@ export default function AgentDashboard() {
       }
     }
     fetchData()
+    fetchAgentVisits()   // ✅ load visits separately
   }, [user])
+
+  useEffect(() => {
+    if (!user?._id) return
+
+    let cancelled = false
+
+    const pollLeadNotifications = async () => {
+      try {
+        const payload = await inquiryService.getForAgent()
+        const nextLeads = Array.isArray(payload?.data) ? payload.data : Array.isArray(payload) ? payload : []
+        const nextMap = {}
+
+        nextLeads.forEach((lead) => {
+          const leadId = lead?._id
+          if (!leadId) return
+          const createdTs = lead?.createdAt ? new Date(lead.createdAt).getTime() : Date.now()
+          nextMap[leadId] = createdTs
+
+          const seenTs = inquiryNotificationRef.current[leadId]
+          if (!inquiryPollBootstrappedRef.current || seenTs != null) return
+
+          // NotificationBell handles real-time toast notifications globally.
+        })
+
+        if (!cancelled) {
+          setLeads(nextLeads)
+          inquiryNotificationRef.current = nextMap
+          if (!inquiryPollBootstrappedRef.current) {
+            inquiryPollBootstrappedRef.current = true
+          }
+        }
+      } catch {
+        // Keep polling silent on transient failures.
+      }
+    }
+
+    pollLeadNotifications()
+    const timer = window.setInterval(pollLeadNotifications, 8000)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
+  }, [user?._id])
+
+  useEffect(() => {
+    if (!user?._id) return
+
+    let cancelled = false
+
+    const pollThreadNotifications = async () => {
+      try {
+        const payload = await threadService.getMine()
+        const threads = extractThreads(payload)
+        const nextMap = {}
+
+        for (const thread of threads) {
+          const threadId = thread?._id
+          if (!threadId) continue
+
+          const lastMessageTs = thread?.lastMessageAt ? new Date(thread.lastMessageAt).getTime() : 0
+          nextMap[threadId] = lastMessageTs
+
+          const participants = Array.isArray(thread?.participants) ? thread.participants : []
+          const me = participants.find((participant) => String(getParticipantUserId(participant)) === String(user._id))
+          const myLastReadTs = me?.lastReadAt ? new Date(me.lastReadAt).getTime() : 0
+          const hasUnread = lastMessageTs > myLastReadTs
+          const alreadyNotifiedTs = threadNotificationRef.current[threadId] || 0
+
+          if (!threadPollBootstrappedRef.current || !hasUnread || lastMessageTs <= alreadyNotifiedTs) {
+            continue
+          }
+
+          // NotificationBell handles real-time toast notifications globally.
+        }
+
+        if (!cancelled) {
+          threadNotificationRef.current = nextMap
+          if (!threadPollBootstrappedRef.current) {
+            threadPollBootstrappedRef.current = true
+          }
+        }
+      } catch {
+        // Silent polling failure: avoid noisy toasts during transient network failures.
+      }
+    }
+
+    pollThreadNotifications()
+    const timer = window.setInterval(pollThreadNotifications, 8000)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
+  }, [user?._id])
 
   const handleDeleteListing = async (id) => {
     if (!window.confirm('Delete this listing?')) return
@@ -360,17 +608,35 @@ export default function AgentDashboard() {
   }
 
   const handleLeadRespond = async (id, reply) => {
-    // optimistic update
     setLeads(l => l.map(lead => lead._id === id ? { ...lead, response: reply } : lead))
     try {
       await inquiryService.respond(id, reply)
       toast.success('Reply sent!')
     } catch {
-      // revert optimistic update
       setLeads(l => l.map(lead => lead._id === id ? { ...lead, response: undefined } : lead))
       toast.error('Failed to send reply')
     }
   }
+
+  const filteredLeads = leads
+    .slice()
+    .sort((a, b) => new Date(b?.createdAt || 0) - new Date(a?.createdAt || 0))
+    .filter((lead) => {
+      const keyword = leadSearch.trim().toLowerCase()
+      if (!keyword) return true
+      const name = String(lead?.name || lead?.sender?.username || lead?.user?.name || '').toLowerCase()
+      return name.includes(keyword)
+    })
+
+  // EmptyState component (used inside tabContent)
+  const EmptyState = ({ icon, title, sub, btn, to }) => (
+    <div style={{ textAlign:'center', padding:'60px 20px' }}>
+      <div style={{ fontSize:42, marginBottom:14 }}>{icon}</div>
+      <h3 style={{ fontFamily:"'Playfair Display',serif", fontSize:19, fontWeight:800, color:'#1a0a2e', marginBottom:8 }}>{title}</h3>
+      <p style={{ color:'rgba(26,10,46,0.5)', fontSize:14, marginBottom:20 }}>{sub}</p>
+      <button onClick={() => navigate(to)} style={{ padding:'10px 24px', background:'linear-gradient(135deg,#7c3aed,#6d28d9)', border:'none', borderRadius:10, color:'#fff', fontSize:14, fontWeight:600, cursor:'pointer' }}>{btn}</button>
+    </div>
+  )
 
   const tabContent = [
     <Overview stats={stats} listings={listings} leads={leads} dailyViews={dailyViews} leadSources={leadSources} />,
@@ -386,9 +652,16 @@ export default function AgentDashboard() {
     </div>,
     <div>
       <div style={{ fontSize:15, fontWeight:700, color:'#1a0a2e', marginBottom:16 }}>{leads.length} Total Leads</div>
+      <input
+        type="text"
+        value={leadSearch}
+        onChange={(event) => setLeadSearch(event.target.value)}
+        placeholder="Search buyer name..."
+        style={{ width: '100%', maxWidth: 320, height: 36, borderRadius: 10, border: '1px solid rgba(124,58,237,0.2)', background: '#faf8ff', color: '#1a0a2e', padding: '0 12px', fontSize: 13, marginBottom: 14, outline: 'none' }}
+      />
       {leads.length === 0
         ? <EmptyState icon="👥" title="No leads yet" sub="Leads from potential buyers will appear here" btn="View My Listings" to="/dashboard/agent"/>
-        : <div style={{ display:'flex', flexDirection:'column', gap:12 }}>{leads.map((l,i)=><LeadCard key={l._id||i} lead={l} onRespond={handleLeadRespond}/>)}</div>
+        : <div style={{ display:'flex', flexDirection:'column', gap:12 }}>{filteredLeads.map((l,i)=><LeadCard key={l._id||i} lead={l} onRespond={handleLeadRespond} onOpenConversation={setActiveLead}/>)}</div>
       }
     </div>,
     <div>
@@ -401,18 +674,29 @@ export default function AgentDashboard() {
         ].map(s=><StatCard key={s.label} {...s}/>)}
       </div>
     </div>,
+    // NEW: Visit Requests tab
+    <div>
+      <div style={{ fontSize:15, fontWeight:700, color:'#1a0a2e', marginBottom:16 }}>Visit Requests ({visits.length})</div>
+      {visitsLoading ? (
+        <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+          {[1,2,3].map(i => <div key={i} style={{ height:140, background:'#f0eeff', borderRadius:14, animation:'pulse 1.5s infinite' }} />)}
+        </div>
+      ) : visits.length === 0 ? (
+        <EmptyState icon="📅" title="No visit requests" sub="Buyers' visit requests will appear here" btn="View Properties" to="/properties" />
+      ) : (
+        <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+          {visits.map(visit => (
+            <AgentVisitCard
+              key={visit._id}
+              visit={visit}
+              onStatusChange={handleVisitStatus}
+              updating={updatingVisitId}
+            />
+          ))}
+        </div>
+      )}
+    </div>,
   ]
-
-  function EmptyState({ icon, title, sub, btn, to }) {
-    return (
-      <div style={{ textAlign:'center', padding:'60px 20px' }}>
-        <div style={{ fontSize:42, marginBottom:14 }}>{icon}</div>
-        <h3 style={{ fontFamily:"'Playfair Display',serif", fontSize:19, fontWeight:800, color:'#1a0a2e', marginBottom:8 }}>{title}</h3>
-        <p style={{ color:'rgba(26,10,46,0.5)', fontSize:14, marginBottom:20 }}>{sub}</p>
-        <button onClick={() => navigate(to)} style={{ padding:'10px 24px', background:'linear-gradient(135deg,#7c3aed,#6d28d9)', border:'none', borderRadius:10, color:'#fff', fontSize:14, fontWeight:600, cursor:'pointer' }}>{btn}</button>
-      </div>
-    )
-  }
 
   return (
     <div style={{ minHeight:'100vh', background:'#ffffff', fontFamily:"'DM Sans',sans-serif", color:'#1a0a2e' }}>
@@ -420,7 +704,6 @@ export default function AgentDashboard() {
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@700;800&display=swap');
         *{box-sizing:border-box;}
         
-        /* Responsive adjustments */
         @media (max-width: 768px) {
           .ag-header-row {
             flex-direction: column !important;
@@ -447,6 +730,7 @@ export default function AgentDashboard() {
             gap: 8px !important;
           }
         }
+        @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.6}}
       `}</style>
 
       {/* Header */}
@@ -463,11 +747,11 @@ export default function AgentDashboard() {
               </div>
             </div>
             <div style={{ display:'flex', gap:10 }}>
+              <NotificationBell user={user} />
               <button onClick={() => navigate('/protected/agent')} style={{ padding:'9px 18px', background:'linear-gradient(135deg,#7c3aed,#6d28d9)', border:'none', borderRadius:9, color:'#fff', fontSize:13, fontWeight:700, cursor:'pointer' }}>+ Post Property</button>
               <button onClick={() => { logout(); navigate('/') }} style={{ padding:'9px 14px', background:'rgba(124,58,237,0.08)', border:'0.5px solid rgba(124,58,237,0.2)', borderRadius:9, color:'#7c3aed', fontSize:13, fontWeight:600, cursor:'pointer' }}>Logout</button>
             </div>
           </div>
-          {/* Tabs */}
           <div style={{ display:'flex', gap:4, overflowX:'auto', scrollbarWidth:'none' }}>
             {TABS.map((t,i) => (
               <button key={t} onClick={() => setTab(i)}
@@ -480,14 +764,15 @@ export default function AgentDashboard() {
         </div>
       </div>
 
-      {/* Content */}
       <div style={{ maxWidth:1100, margin:'0 auto', padding:'32px 6vw 60px' }}>
         {loading
           ? <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(180px,1fr))', gap:16 }}>{Array.from({length:4}).map((_,i)=><div key={i} style={{ height:110, background:'#f0eeff', borderRadius:14, animation:'pulse 1.5s infinite' }}/>)}</div>
           : tabContent[tab]
         }
       </div>
-      <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.6}}`}</style>
+      {activeLead && (
+        <ThreadPanel inquiry={activeLead} user={user} onClose={() => setActiveLead(null)} />
+      )}
     </div>
   )
 }

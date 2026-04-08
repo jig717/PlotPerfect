@@ -1,9 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { propertyService, inquiryService } from '../../services'
 import { useAuth } from '../../context/AuthContext'
 import { formatPrice, timeAgo, getInitials } from '../../utils/index'
 import { toast } from 'react-toastify'
+import NotificationBell from '../../Components/ui/NotificationBell'
+import ThreadPanel from '../../Components/messaging/ThreadPanel'
 
 const TABS = ['Overview', 'My Properties', 'Inquiries', 'Analytics']
 
@@ -221,7 +223,7 @@ function PropertyRow({ prop, onDelete, onStatusChange }) {
 }
 
 /* ── Inquiry Card (light theme) ── */
-function InquiryCard({ inquiry, onRespond }) {
+function InquiryCard({ inquiry, onRespond, onOpenConversation }) {
   const [replying, setReplying] = useState(false)
   const [reply, setReply] = useState('')
   const [loading, setLoading] = useState(false)
@@ -289,6 +291,14 @@ function InquiryCard({ inquiry, onRespond }) {
       ) : (
         <button onClick={() => setReplying(true)} style={{ padding: '7px 14px', background: 'rgba(124,58,237,0.08)', border: '1px solid rgba(124,58,237,0.3)', borderRadius: 8, color: '#7c3aed', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>↩ Reply</button>
       )}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
+        <button
+          onClick={() => onOpenConversation?.(inquiry)}
+          style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid rgba(124,58,237,0.25)', background: '#fff', color: '#7c3aed', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+        >
+          Open Chat
+        </button>
+      </div>
     </div>
   )
 }
@@ -346,8 +356,12 @@ export default function OwnerDashboard() {
   const [tab, setTab] = useState(0)
   const [listings, setListings] = useState([])
   const [leads, setLeads] = useState([])
+  const [leadSearch, setLeadSearch] = useState('')
+  const [activeInquiry, setActiveInquiry] = useState(null)
   const [stats, setStats] = useState({})
   const [loading, setLoading] = useState(true)
+  const inquiryNotificationRef = useRef({})
+  const inquiryPollBootstrappedRef = useRef(false)
 
   useEffect(() => {
     const fetchData = async () => {
@@ -380,6 +394,54 @@ export default function OwnerDashboard() {
     if (user) fetchData()
   }, [user])
 
+  useEffect(() => {
+    if (!user?._id) return
+
+    let cancelled = false
+
+    const pollOwnerInquiryNotifications = async () => {
+      try {
+        const inquiriesPayload = await inquiryService.getAll()
+        const allInquiries = inquiriesPayload?.data || inquiriesPayload || []
+        const propertyIds = new Set((listings || []).map((property) => property?._id?.toString()).filter(Boolean))
+        const ownerInquiries = propertyIds.size
+          ? allInquiries.filter((inquiry) => propertyIds.has(inquiry?.property?._id?.toString()))
+          : []
+
+        const nextMap = {}
+        ownerInquiries.forEach((inquiry) => {
+          const inquiryId = inquiry?._id
+          if (!inquiryId) return
+          const createdTs = inquiry?.createdAt ? new Date(inquiry.createdAt).getTime() : Date.now()
+          nextMap[inquiryId] = createdTs
+
+          const seenTs = inquiryNotificationRef.current[inquiryId]
+          if (!inquiryPollBootstrappedRef.current || seenTs != null) return
+
+          // NotificationBell handles real-time toast notifications globally.
+        })
+
+        if (!cancelled) {
+          setLeads(ownerInquiries)
+          inquiryNotificationRef.current = nextMap
+          if (!inquiryPollBootstrappedRef.current) {
+            inquiryPollBootstrappedRef.current = true
+          }
+        }
+      } catch {
+        // Keep polling silent on transient failures.
+      }
+    }
+
+    pollOwnerInquiryNotifications()
+    const timer = window.setInterval(pollOwnerInquiryNotifications, 8000)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
+  }, [user?._id, listings])
+
   const handleDeleteListing = async (id) => {
     if (!window.confirm('Delete this listing?')) return
     try {
@@ -404,6 +466,16 @@ export default function OwnerDashboard() {
       activeListings: prev.activeListings + (newStatus === 'APPROVED' ? 1 : newStatus === 'SOLD' || newStatus === 'RENTED' ? -1 : 0)
     }))
   }
+
+  const filteredLeads = leads
+    .slice()
+    .sort((a, b) => new Date(b?.createdAt || 0) - new Date(a?.createdAt || 0))
+    .filter((lead) => {
+      const keyword = leadSearch.trim().toLowerCase()
+      if (!keyword) return true
+      const name = String(lead?.user?.name || lead?.name || '').toLowerCase()
+      return name.includes(keyword)
+    })
 
   const viewsData = [
     { label: 'Mon', value: stats.mon || 12 },
@@ -455,11 +527,18 @@ export default function OwnerDashboard() {
     </div>,
     <div>
       <div style={{ fontSize: 18, fontWeight: 700, color: '#1a0a2e', marginBottom: 20 }}>{leads.length} Total Inquiries</div>
+      <input
+        type="text"
+        value={leadSearch}
+        onChange={(event) => setLeadSearch(event.target.value)}
+        placeholder="Search buyer name..."
+        style={{ width: '100%', maxWidth: 320, height: 36, borderRadius: 10, border: '1px solid rgba(124,58,237,0.2)', background: '#faf8ff', color: '#1a0a2e', padding: '0 12px', fontSize: 13, marginBottom: 14, outline: 'none' }}
+      />
       {leads.length === 0 ? (
         <EmptyState icon="💬" title="No inquiries yet" sub="Leads from potential buyers will appear here" btn="View My Listings" to="/dashboard/owner" />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {leads.map(lead => <InquiryCard key={lead._id} inquiry={lead} onRespond={handleLeadRespond} />)}
+          {filteredLeads.map(lead => <InquiryCard key={lead._id} inquiry={lead} onRespond={handleLeadRespond} onOpenConversation={setActiveInquiry} />)}
         </div>
       )}
     </div>,
@@ -564,6 +643,7 @@ export default function OwnerDashboard() {
               </div>
             </div>
             <div style={{ display: 'flex', gap: 10 }}>
+              <NotificationBell user={user} />
               <button 
                 onClick={() => navigate('/protected/agent')} 
                 style={{ 
@@ -644,6 +724,9 @@ export default function OwnerDashboard() {
           tabContent[tab]
         )}
       </div>
+      {activeInquiry && (
+        <ThreadPanel inquiry={activeInquiry} user={user} onClose={() => setActiveInquiry(null)} />
+      )}
       <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.6}}`}</style>
     </div>
   )
