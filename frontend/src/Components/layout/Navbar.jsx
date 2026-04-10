@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
+import { getDashboardPath, resolveApiAssetUrl } from '../../utils'
 
 const NAV_TABS = ['Buy', 'Rent', 'PG / Hostel', 'Commercial', 'Post Property']
 
@@ -33,6 +34,10 @@ export default function Navbar() {
     if (!name) return 'U'
     return name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase()
   }
+
+  const avatarSource = resolveApiAssetUrl(
+    user?.profileImage || user?.profile_image || user?.avatar || user?.image || ''
+  )
 
   // Toggle dropdown
   const toggleDropdown = () => setDropdownOpen(!dropdownOpen)
@@ -89,11 +94,11 @@ export default function Navbar() {
             <div className="relative user-dropdown">
               <button
                 onClick={toggleDropdown}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[rgba(124,58,237,0.2)] bg-transparent hover:bg-[rgba(124,58,237,0.04)] transition"
+                className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-[rgba(124,58,237,0.2)] bg-transparent hover:bg-[rgba(124,58,237,0.04)] transition"
               >
-                <div className="w-8 h-8 rounded-full bg-linear-to-br from-[#a78bfa] to-[#7c3aed] flex items-center justify-center text-white text-sm font-bold">
-                  {user.profileImage ? (
-                    <img src={user.profileImage} alt={user.name} className="w-8 h-8 rounded-full object-cover" />
+                <div className="w-8 h-8 rounded-full overflow-hidden shrink-0 bg-linear-to-br from-[#a78bfa] to-[#7c3aed] flex items-center justify-center text-white text-sm font-bold">
+                  {avatarSource ? (
+                    <img src={avatarSource} alt={user.name} className="w-full h-full rounded-full object-cover" />
                   ) : (
                     getInitials(user.name || user.email)
                   )}
@@ -115,11 +120,20 @@ export default function Navbar() {
                 <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-[rgba(124,58,237,0.1)] overflow-hidden z-50">
                   <button
                     onClick={() => {
-                    if (user.role === 'admin') navigate('/admin');
-                    else if (user.role === 'agent') navigate('/dashboard/agent');
-                    else if (user.role === 'owner') navigate('/dashboard/owner');
-                    else if (user.role === 'support') navigate('/support');
-                    else navigate('/dashboard/buyer');
+                      navigate('/profile')
+                      setDropdownOpen(false)
+                    }}
+                    className="w-full text-left px-4 py-2 text-sm text-[#1a0a2e] hover:bg-[rgba(124,58,237,0.08)] transition flex items-center gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Profile
+                  </button>
+                  <button
+                    onClick={() => {
+                      navigate(getDashboardPath(user.role))
+                      setDropdownOpen(false)
                   }}
                     className="w-full text-left px-4 py-2 text-sm text-[#1a0a2e] hover:bg-[rgba(124,58,237,0.08)] transition flex items-center gap-2"
                   >
@@ -183,9 +197,9 @@ export default function Navbar() {
             {/* User Section */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-full bg-linear-to-br from-[#a78bfa] to-[#7c3aed] flex items-center justify-center text-white font-bold text-lg">
-                  {user?.profileImage ? (
-                    <img src={user.profileImage} alt={user.name} className="w-12 h-12 rounded-full object-cover" />
+                <div className="w-12 h-12 rounded-full overflow-hidden shrink-0 bg-linear-to-br from-[#a78bfa] to-[#7c3aed] flex items-center justify-center text-white font-bold text-lg">
+                  {avatarSource ? (
+                    <img src={avatarSource} alt={user.name} className="w-full h-full rounded-full object-cover" />
                   ) : user ? (
                     getInitials(user.name || user.email)
                   ) : (
@@ -217,13 +231,18 @@ export default function Navbar() {
                 <button
                   className="w-full px-4 py-3 rounded-lg border border-[rgba(124,58,237,0.3)] text-[#7c3aed] font-semibold text-sm hover:bg-[#7c3aed] hover:text-white transition"
                   onClick={() => {
-                    if (user.role === 'admin') navigate('/admin');
-                    else if (user.role === 'agent') navigate('/dashboard/agent');
-                    else if (user.role === 'owner') navigate('/dashboard/owner');
-                    else if (user.role === 'support') navigate('/support');
-                    else navigate('/dashboard/buyer');
-                    setMobileMenuOpen(false);
-                    }}
+                    navigate('/profile')
+                    setMobileMenuOpen(false)
+                  }}
+                >
+                  Profile
+                </button>
+                <button
+                  className="w-full px-4 py-3 rounded-lg border border-[rgba(124,58,237,0.3)] text-[#7c3aed] font-semibold text-sm hover:bg-[#7c3aed] hover:text-white transition"
+                  onClick={() => {
+                    navigate(getDashboardPath(user.role))
+                    setMobileMenuOpen(false)
+                  }}
                 >
                   Dashboard
                 </button>
@@ -306,3 +325,7 @@ export default function Navbar() {
     </nav>
   )
 } 
+
+
+
+

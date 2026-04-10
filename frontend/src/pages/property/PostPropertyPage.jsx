@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { propertyService } from "../../services"
 import { useAuth } from "../../context/AuthContext"
@@ -20,6 +20,7 @@ export default function PostPropertyPage() {
     listingType:"sale",
     propertyType:"",
     price:"",
+    description:"",
     city:"",
     locality:"",
     area:"",
@@ -34,6 +35,7 @@ export default function PostPropertyPage() {
   // Handle image selection
   const handleImageSelect = (e) => {
     const files = Array.from(e.target.files)
+    if (!files.length) return
     setImageFiles(prev => [...prev, ...files])
     const newPreviews = files.map(file => URL.createObjectURL(file))
     setImagePreviews(prev => [...prev, ...newPreviews])
@@ -63,6 +65,7 @@ export default function PostPropertyPage() {
         purpose: data.listingType,
         type: typeMap[data.propertyType] || 'apartment',
         price: Number(data.price),
+        description: data.description,
         location: {
           city: data.city,
           address: data.locality,
@@ -74,17 +77,21 @@ export default function PostPropertyPage() {
       }
 
       const response = await propertyService.create(propertyData)
-      const propertyId = response.data._id
+      const propertyId = response?._id || response?.data?._id
+      if (!propertyId) {
+        throw new Error("Property created but no ID was returned")
+      }
 
       if (imageFiles.length > 0) {
         const formData = new FormData()
+        formData.append('propertyId', propertyId)
         formData.append('property_id', propertyId)
         imageFiles.forEach(file => formData.append('images', file))
         await propertyService.uploadImages(propertyId, formData)
       }
 
       toast.success("Property Listed 🚀")
-      navigate("/dashboard/agent")
+      navigate(user?.role === 'owner' ? "/dashboard/owner" : "/dashboard/agent")
     } catch (error) {
       console.error(error)
       toast.error("Failed to create property")
@@ -93,14 +100,29 @@ export default function PostPropertyPage() {
     }
   }
 
+  useEffect(() => {
+    return () => {
+      imagePreviews.forEach((url) => URL.revokeObjectURL(url))
+    }
+  }, [imagePreviews])
+
   return (
     <div className="min-h-screen bg-[#f8f7ff]">
       {/* HEADER */}
-      <div className="border-b border-[rgba(124,58,237,0.15)] bg-white px-6 py-4 flex justify-between sticky top-0 z-10">
+      <div className="border-b border-[rgba(124,58,237,0.15)] bg-white px-6 py-4 flex justify-between items-center sticky top-0 z-10 gap-3 flex-wrap">
         <h1 className="text-xl font-bold text-[#1a0a2e]">Post Property</h1>
-        <button onClick={() => navigate(-1)} className="text-[rgba(26,10,46,0.5)] hover:text-[#7c3aed] transition">
-          Back
-        </button>
+        <div className="flex items-center gap-3 flex-wrap">
+          <button
+            type="button"
+            onClick={() => navigate('/')}
+            className="px-4 py-2 rounded-lg border border-[rgba(124,58,237,0.22)] text-[#7c3aed] font-medium hover:bg-[rgba(124,58,237,0.05)] transition"
+          >
+            ← Back to Website
+          </button>
+          <button onClick={() => navigate(-1)} className="text-[rgba(26,10,46,0.5)] hover:text-[#7c3aed] transition">
+            Back
+          </button>
+        </div>
       </div>
 
       <div className="max-w-3xl mx-auto px-4 py-8">
@@ -127,6 +149,7 @@ export default function PostPropertyPage() {
             <>
               <Input label="Title" value={data.title} onChange={v => set("title", v)} />
               <Input label="Price" type="number" value={data.price} onChange={v => set("price", v)} />
+              <TextArea label="Description" value={data.description} onChange={v => set("description", v)} />
             </>
           )}
 
@@ -200,6 +223,7 @@ export default function PostPropertyPage() {
               <ul className="mt-2 space-y-1">
                 <li><strong>Title:</strong> {data.title || "—"}</li>
                 <li><strong>Price:</strong> ₹{data.price || "—"}</li>
+                <li><strong>Description:</strong> {data.description || "—"}</li>
                 <li><strong>City:</strong> {data.city || "—"}</li>
                 <li><strong>Locality:</strong> {data.locality || "—"}</li>
                 <li><strong>Area:</strong> {data.area || "—"} sqft</li>
@@ -254,6 +278,20 @@ function Input({ label, value, onChange, type = "text" }) {
         value={value}
         onChange={(e) => onChange(e.target.value)}
         className="w-full p-2 rounded-lg border border-[rgba(124,58,237,0.2)] bg-[#f9f9ff] text-[#1a0a2e] outline-none focus:border-[#7c3aed] focus:ring-1 focus:ring-[#7c3aed] transition"
+      />
+    </div>
+  )
+}
+
+function TextArea({ label, value, onChange }) {
+  return (
+    <div>
+      <label className="block text-sm font-semibold text-[rgba(26,10,46,0.7)] mb-1">{label}</label>
+      <textarea
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        rows={4}
+        className="w-full p-2 rounded-lg border border-[rgba(124,58,237,0.2)] bg-[#f9f9ff] text-[#1a0a2e] outline-none focus:border-[#7c3aed] focus:ring-1 focus:ring-[#7c3aed] transition resize-y"
       />
     </div>
   )

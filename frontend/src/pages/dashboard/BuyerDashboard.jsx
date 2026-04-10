@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { userService, inquiryService, threadService } from '../../services'
 import { useAuth } from '../../context/AuthContext'
-import { formatPrice, timeAgo, getInitials } from '../../utils/index'
+import { formatPrice, timeAgo, getInitials, resolveApiAssetUrl } from '../../utils/index'
 import { toast } from 'react-toastify'
 import visitService from '../../services/visitService'
 import ThreadPanel from '../../Components/messaging/ThreadPanel'
@@ -653,6 +653,7 @@ export default function BuyerDashboard() {
   ]
 
   const firstName = user?.name?.split(' ')[0] || user?.username?.split(' ')[0] || 'there'
+  const profileImageSrc = resolveApiAssetUrl(user?.profileImage || user?.profile_image || user?.avatar || user?.image || '')
 
   return (
     <div style={{ minHeight: '100vh', background: '#f8f7ff', fontFamily: "'DM Sans',sans-serif", color: '#1a0a2e' }}>
@@ -668,15 +669,27 @@ export default function BuyerDashboard() {
         <div style={{ maxWidth: 1100, margin: '0 auto' }}>
           <div className="db-header-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 16 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-              <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, fontWeight: 800, color: '#fff', boxShadow: '0 6px 20px rgba(124,58,237,0.25)' }}>
-                {getInitials(user?.name || user?.username || 'U')}
+              <div style={{ width: 56, height: 56, borderRadius: '50%', overflow: 'hidden', background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, fontWeight: 800, color: '#fff', boxShadow: '0 6px 20px rgba(124,58,237,0.25)' }}>
+                {profileImageSrc ? (
+                  <img src={profileImageSrc} alt={user?.name || 'Profile'} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
+                ) : (
+                  getInitials(user?.name || user?.username || 'U')
+                )}
               </div>
               <div>
                 <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 22, fontWeight: 800, color: '#1a0a2e' }}>Welcome back, {firstName}!</div>
                 <div style={{ fontSize: 13, color: 'rgba(26,10,46,0.5)', marginTop: 2 }}>{user?.email}</div>
               </div>
             </div>
-            <div style={{ display: 'flex', gap: 10 }}>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => navigate('/')}
+                style={{ padding: '10px 20px', background: '#ffffff', border: '1px solid rgba(124,58,237,0.22)', borderRadius: 40, color: '#7c3aed', fontSize: 14, fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s' }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(124,58,237,0.08)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.transform = 'translateY(0)'; }}
+              >
+                ← Back to Website
+              </button>
               <NotificationBell user={user} />
               <button onClick={() => navigate('/properties')} style={{ padding: '10px 20px', background: 'rgba(124,58,237,0.08)', border: '1px solid rgba(124,58,237,0.2)', borderRadius: 40, color: '#7c3aed', fontSize: 14, fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s' }}
                 onMouseEnter={e => { e.currentTarget.style.background = '#7c3aed'; e.currentTarget.style.color = '#fff'; }}
@@ -731,3 +744,4 @@ export default function BuyerDashboard() {
     </div>
   )
 }
+

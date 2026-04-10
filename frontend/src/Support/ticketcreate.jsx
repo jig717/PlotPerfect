@@ -54,12 +54,14 @@
 
 
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { supportService } from "../services";
 import { toast } from "react-toastify";
 
 export default function CreateTicket() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [form, setForm] = useState({
     subject: "",
     message: "",
@@ -89,7 +91,25 @@ export default function CreateTicket() {
 
   return (
     <div style={{ padding: 30 }}>
-      <h2>Create Support Ticket</h2>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
+        <h2 style={{ margin: 0 }}>Create Support Ticket</h2>
+        <button
+          type="button"
+          onClick={() => navigate("/")}
+          style={{
+            padding: "10px 16px",
+            background: "#ffffff",
+            border: "1px solid rgba(124,58,237,0.22)",
+            borderRadius: 10,
+            color: "#7c3aed",
+            fontSize: 14,
+            fontWeight: 600,
+            cursor: "pointer"
+          }}
+        >
+          ← Back to Website
+        </button>
+      </div>
       <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <input
           placeholder="Subject"

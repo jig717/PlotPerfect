@@ -11,6 +11,26 @@ const extractList = (payload) => {
   return []
 }
 
+const extractObjectId = (value) => {
+  if (!value) return null
+  const raw = typeof value === 'string' ? value : value?._id || value?.id || null
+  if (!raw) return null
+  const match = String(raw).match(/[a-fA-F0-9]{24}/)
+  return match ? match[0] : null
+}
+
+const resolveInquiryId = (inquiry) =>
+  extractObjectId(inquiry?._id) ||
+  extractObjectId(inquiry?.inquiryId) ||
+  extractObjectId(inquiry?.inquiry_id) ||
+  extractObjectId(inquiry?.inquiry)
+
+const resolveThreadId = (inquiry) =>
+  extractObjectId(inquiry?.thread?._id) ||
+  extractObjectId(inquiry?.threadId) ||
+  extractObjectId(inquiry?.thread_id) ||
+  extractObjectId(inquiry?.thread)
+
 export default function ThreadPanel({ inquiry, user, onClose }) {
   const [thread, setThread] = useState(null)
   const [messages, setMessages] = useState([])
@@ -19,17 +39,39 @@ export default function ThreadPanel({ inquiry, user, onClose }) {
   const [sending, setSending] = useState(false)
    const hasBootstrapped = useRef(false)
    const seenMessageIds = useRef(new Set())
+  const inquiryId = resolveInquiryId(inquiry)
+  const preferredThreadId = resolveThreadId(inquiry)
 
   useEffect(() => {
-    if (!inquiry?._id || !user?._id) return
+    if (!user?._id || (!inquiryId && !preferredThreadId)) return
 
     let cancelled = false
 
     const loadThread = async ({ silent = false } = {}) => {
       if (!silent) setLoading(true)
       try {
-        const threadRes = await threadService.getByInquiryId(inquiry._id)
-        const threadData = extractData(threadRes)
+        let threadData = null
+
+        if (preferredThreadId) {
+          const byIdRes = await threadService.getById(preferredThreadId)
+          threadData = extractData(byIdRes)
+        }
+
+        if (!threadData?._id && inquiryId) {
+          try {
+            const threadRes = await threadService.getByInquiryId(inquiryId)
+            threadData = extractData(threadRes)
+          } catch (error) {
+            const status = error?.response?.status
+            if (status === 400 || status === 404) {
+              const createdThread = await threadService.create({ inquiryId })
+              threadData = extractData(createdThread)
+            } else {
+              throw error
+            }
+          }
+        }
+
         if (!threadData?._id) throw new Error('Thread not found')
 
         const messagesRes = await threadService.getMessages(threadData._id)
@@ -60,7 +102,9 @@ export default function ThreadPanel({ inquiry, user, onClose }) {
       } catch (error) {
         if (!cancelled) {
           console.error('Failed to load thread:', error)
-          toast.error(error?.response?.data?.message || 'Failed to load conversation')
+          if (!silent) {
+            toast.error(error?.response?.data?.message || 'Failed to load conversation')
+          }
         }
       } finally {
         if (!cancelled && !silent) setLoading(false)
@@ -74,7 +118,7 @@ export default function ThreadPanel({ inquiry, user, onClose }) {
       cancelled = true
       window.clearInterval(timer)
     }
-  }, [inquiry?._id, user?._id])
+  }, [inquiryId, preferredThreadId, user?._id])
 
   const handleSend = async () => {
     const content = draft.trim()
@@ -300,4 +344,3 @@ export default function ThreadPanel({ inquiry, user, onClose }) {
     </div>
   )
 }
-

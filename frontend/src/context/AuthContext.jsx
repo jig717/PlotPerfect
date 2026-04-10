@@ -56,7 +56,7 @@ export function AuthProvider({ children }) {
 
   const updateUser = useCallback((updates) => {
     setUser(prev => {
-      const next = { ...prev, ...updates }
+      const next = { ...(prev || {}), ...updates }
       localStorage.setItem('user', JSON.stringify(next))
       return next
     })

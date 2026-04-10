@@ -32,7 +32,17 @@ export const buildQuery = (params = {}) => {
 }
 
 export const getDashboardPath = (role) =>
-  ({ buyer:'/dashboard/buyer', owner:'/dashboard/agent', agent:'/dashboard/agent', admin:'/admin' }[role] || '/dashboard/buyer')
+  ({ buyer:'/dashboard/buyer', owner:'/dashboard/owner', agent:'/dashboard/agent', admin:'/admin', support:'/support' }[role] || '/dashboard/buyer')
+
+export const resolveApiAssetUrl = (path = '') => {
+  if (!path) return ''
+  if (/^(https?:|data:|blob:)/i.test(path)) return path
+
+  const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3400'
+  const normalizedBase = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl
+  const normalizedPath = String(path).startsWith('/') ? path : `/${path}`
+  return `${normalizedBase}${normalizedPath}`
+}
 
 export const getBadgeColor = (type) =>
   ({ sale:'#7c3aed', rent:'#0284c7', pg:'#16a34a', lease:'#ea580c' }[type] || '#7c3aed')

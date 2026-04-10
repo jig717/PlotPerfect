@@ -653,7 +653,25 @@ export default function AdminDashboard() {
                 </div>
               </div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => navigate('/')}
+                style={{
+                  padding: '10px 20px', background: '#ffffff', border: '1px solid rgba(124,58,237,0.22)',
+                  borderRadius: 40, color: '#7c3aed', fontSize: 14, fontWeight: 600, cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.background = 'rgba(124,58,237,0.08)';
+                  e.currentTarget.style.transform = 'translateY(-1px)';
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.background = '#ffffff';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                }}
+              >
+                ← Back to Website
+              </button>
               <NotificationBell user={user} />
               <button 
                 onClick={logout} 

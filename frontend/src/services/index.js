@@ -38,10 +38,21 @@ export const propertyService = {
   }),
 };
 
+export const reviewService = {
+  getLatest: (params) => api.get('/review', { params }),
+  getByProperty: (propertyId) => api.get(`/review/${propertyId}`),
+  create: (data) => api.post('/review', data),
+  delete: (id) => api.delete(`/review/${id}`),
+}
 
 export const userService = {
   getProfile: () => api.get('/user/profile'),
-  updateProfile: data => api.put('/user/profile', data),
+  updateProfile: data => {
+    const isFormData = typeof FormData !== 'undefined' && data instanceof FormData
+    return api.put('/user/profile', data, isFormData
+      ? { headers: { 'Content-Type': 'multipart/form-data' } }
+      : undefined)
+  },
   getSaved: (userId) => api.get(`/favorite/${userId}`),      
   saveProperty: (userId, propertyId) => api.post('/favorite', { userId, propertyId }),
   unsave: (favoriteId) => api.delete(`/favorite/${favoriteId}`),

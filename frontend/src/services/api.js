@@ -22,6 +22,10 @@ api.interceptors.response.use(
   res => res.data,
   err => {
     if (err.response?.status === 401) {
+      const currentPath = `${window.location.pathname}${window.location.search}${window.location.hash}`
+      if (currentPath !== '/login' && currentPath !== '/signup') {
+        sessionStorage.setItem('postLoginRedirect', currentPath)
+      }
       localStorage.removeItem('token')
       localStorage.removeItem('user')
       window.location.href = '/login'

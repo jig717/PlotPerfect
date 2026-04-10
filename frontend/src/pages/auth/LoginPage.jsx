@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { handleGoogleLogin } from "../../utils/authUtils";
@@ -33,6 +33,7 @@ export default function LoginPage() {
   const [err, setErr] = useState({});
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const validate = () => {
     const e = {};
@@ -72,12 +73,22 @@ export default function LoginPage() {
  const result = await login({ email, password });
 if (result.success) {
   toast.success("Login successful!");
-  const role = result.role;
-  if (role === 'admin') navigate('/admin');
-  else if (role === 'agent') navigate('/dashboard/agent');
-  else if (role === 'owner') navigate('/dashboard/owner');
-  else if (role === 'support') navigate('/support');
-  else navigate('/');
+  const stateRedirect = location.state?.from;
+  const storedRedirect = sessionStorage.getItem('postLoginRedirect');
+  const redirectTarget = stateRedirect || storedRedirect;
+
+  if (redirectTarget && redirectTarget !== '/login' && redirectTarget !== '/signup') {
+    sessionStorage.removeItem('postLoginRedirect');
+    navigate(redirectTarget, { replace: true });
+  } else {
+    sessionStorage.removeItem('postLoginRedirect');
+    const role = result.role;
+    if (role === 'admin') navigate('/admin');
+    else if (role === 'agent') navigate('/dashboard/agent');
+    else if (role === 'owner') navigate('/dashboard/owner');
+    else if (role === 'support') navigate('/support');
+    else navigate('/');
+  }
 }
     setLoading(false);
   };

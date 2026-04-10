@@ -417,38 +417,61 @@
               </div>
 
       {/* Right — actions */}
-              <div style={{ display: 'flex', gap: 8 }}>
-    <NotificationBell user={user} />
-    {/* create button */}
-    <button
-      onClick={() => navigate('/support/create')}
-      style={{
-        padding: '9px 16px',
-        background: 'linear-gradient(135deg,#7c3aed,#6d28d9)',
-        border: 'none',
-        borderRadius: 9,
-        color: '#fff',
-        fontSize: 13.5,
-        fontWeight: 600,
-        cursor: 'pointer',
-        boxShadow: '0 4px 14px rgba(124,58,237,0.35)'
-      }}
-    >
-      + Create Ticket
-    </button>
-    <button
-      onClick={loadData}
-      style={{
-        padding: '9px 16px',
-        background: '#f0eeff',
-        border: '1.5px solid rgba(124,58,237,0.2)',
-        borderRadius: 9,
-        color: '#7c3aed',
-        fontSize: 13.5,
-        fontWeight: 600,
-        cursor: 'pointer'
-      }}
-    >
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                <button
+                  onClick={() => navigate('/')}
+                  style={{
+                    padding: '9px 16px',
+                    background: '#ffffff',
+                    border: '1.5px solid rgba(124,58,237,0.22)',
+                    borderRadius: 9,
+                    color: '#7c3aed',
+                    fontSize: 13.5,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.background = 'rgba(124,58,237,0.08)';
+                    e.currentTarget.style.transform = 'translateY(-1px)';
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.background = '#ffffff';
+                    e.currentTarget.style.transform = 'translateY(0)';
+                  }}
+                >
+                  ← Back to Website
+                </button>
+                <NotificationBell user={user} />
+                <button
+                  onClick={() => navigate('/support/create')}
+                  style={{
+                    padding: '9px 16px',
+                    background: 'linear-gradient(135deg,#7c3aed,#6d28d9)',
+                    border: 'none',
+                    borderRadius: 9,
+                    color: '#fff',
+                    fontSize: 13.5,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 14px rgba(124,58,237,0.35)'
+                  }}
+                >
+                  + Create Ticket
+                </button>
+                <button
+                  onClick={loadData}
+                  style={{
+                    padding: '9px 16px',
+                    background: '#f0eeff',
+                    border: '1.5px solid rgba(124,58,237,0.2)',
+                    borderRadius: 9,
+                    color: '#7c3aed',
+                    fontSize: 13.5,
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
                   🔄 Refresh
                 </button>
                 <button

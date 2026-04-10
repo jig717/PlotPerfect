@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
-import { propertyService, inquiryService } from "../../services";
+import { propertyService, inquiryService, reviewService } from "../../services";
 import { useAuth } from "../../context/AuthContext";
 import { formatPrice, timeAgo, getInitials } from "../../utils/index";
 import api from "../../services/api";
@@ -119,6 +119,77 @@ function Section({ title, children }) {
       </h3>
       {children}
     </div>
+  );
+}
+
+function ReviewSection({ reviews, loading, user, onSubmitReview, submittingReview, reviewForm, setReviewForm }) {
+  return (
+    <Section title="Reviews">
+      <div className="space-y-4">
+        {loading ? (
+          <p className="text-sm text-[rgba(26,10,46,0.55)]">Loading reviews...</p>
+        ) : reviews.length === 0 ? (
+          <p className="text-sm text-[rgba(26,10,46,0.55)]">No reviews yet. Be the first to review this property.</p>
+        ) : (
+          <div className="space-y-3">
+            {reviews.map((review) => {
+              const reviewerName = review?.user?.name || review?.reviewerName || "Verified User";
+              const ratingValue = Number(review?.rating) || 0;
+              const stars = "★".repeat(Math.max(1, Math.min(5, Math.round(ratingValue))));
+
+              return (
+                <div key={review?._id} className="bg-[#f9f9ff] rounded-xl p-3 border border-[rgba(124,58,237,0.08)]">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="font-semibold text-[#1a0a2e]">{reviewerName}</div>
+                    <div className="text-sm text-[#7c3aed]">{stars}</div>
+                  </div>
+                  <div className="text-xs text-[rgba(26,10,46,0.45)] mt-1">{timeAgo(review?.createdAt)}</div>
+                  <p className="text-sm text-[rgba(26,10,46,0.72)] mt-2">{review?.comment || "Great property."}</p>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        <div className="pt-2 border-t border-[rgba(124,58,237,0.08)]">
+          {!user ? (
+            <p className="text-sm text-[rgba(26,10,46,0.55)]">Login to write a review.</p>
+          ) : (
+            <form onSubmit={onSubmitReview} className="space-y-2">
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-[rgba(26,10,46,0.65)] font-medium">Rating</label>
+                <select
+                  value={reviewForm.rating}
+                  onChange={(e) => setReviewForm((p) => ({ ...p, rating: e.target.value }))}
+                  className="h-9 px-2 rounded-lg border border-[rgba(124,58,237,0.2)] bg-white text-sm"
+                >
+                  <option value="5">5 - Excellent</option>
+                  <option value="4">4 - Good</option>
+                  <option value="3">3 - Average</option>
+                  <option value="2">2 - Fair</option>
+                  <option value="1">1 - Poor</option>
+                </select>
+              </div>
+              <textarea
+                rows={3}
+                required
+                value={reviewForm.comment}
+                onChange={(e) => setReviewForm((p) => ({ ...p, comment: e.target.value }))}
+                placeholder="Share your experience about this property..."
+                className="w-full p-3 rounded-xl border border-[rgba(124,58,237,0.2)] bg-[#f9f9ff] text-[#1a0a2e] text-sm outline-none focus:border-[#7c3aed]"
+              />
+              <button
+                type="submit"
+                disabled={submittingReview}
+                className="px-4 py-2 rounded-lg bg-linear-to-r from-[#7c3aed] to-[#6d28d9] text-white text-sm font-semibold disabled:opacity-70"
+              >
+                {submittingReview ? "Submitting..." : "Submit Review"}
+              </button>
+            </form>
+          )}
+        </div>
+      </div>
+    </Section>
   );
 }
 
@@ -313,6 +384,10 @@ export default function PropertyDetailPage() {
   const [favoriteId, setFavoriteId] = useState(null);
   const [isToggling, setIsToggling] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [reviews, setReviews] = useState([]);
+  const [reviewsLoading, setReviewsLoading] = useState(false);
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [reviewForm, setReviewForm] = useState({ rating: "5", comment: "" });
 
   const getFavoritesList = (res) => {
     if (Array.isArray(res?.data)) return res.data;
@@ -361,6 +436,42 @@ export default function PropertyDetailPage() {
       cancelled = true;
     };
   }, [id]);
+
+  useEffect(() => {
+    if (!id) return;
+
+    let cancelled = false;
+    const loadReviews = async () => {
+      try {
+        setReviewsLoading(true);
+        const response = await reviewService.getByProperty(id);
+        const list = Array.isArray(response?.data) ? response.data : [];
+        if (!cancelled) setReviews(list);
+      } catch (err) {
+        // Gracefully fallback to empty list when no reviews exist yet.
+        if (!cancelled) setReviews([]);
+      } finally {
+        if (!cancelled) setReviewsLoading(false);
+      }
+    };
+
+    loadReviews();
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+
+  useEffect(() => {
+    if (!property || window.location.hash !== "#contact-owner") return;
+    const timeoutId = window.setTimeout(() => {
+      document.getElementById("contact-owner")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 120);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [property]);
 
   // CHECK FAVORITE STATUS
   useEffect(() => {
@@ -506,6 +617,40 @@ export default function PropertyDetailPage() {
       document.execCommand("copy");
       document.body.removeChild(textArea);
       toast.success("Link copied! You can now share it.");
+    }
+  };
+
+  const handleSubmitReview = async (e) => {
+    e.preventDefault();
+
+    if (!user) {
+      toast.info("Please login to add a review");
+      navigate("/login");
+      return;
+    }
+
+    if (!property?._id) {
+      toast.error("Property not loaded yet");
+      return;
+    }
+
+    setSubmittingReview(true);
+    try {
+      await reviewService.create({
+        property: property._id,
+        rating: Number(reviewForm.rating),
+        comment: reviewForm.comment.trim(),
+      });
+
+      toast.success("Review submitted successfully");
+      setReviewForm({ rating: "5", comment: "" });
+
+      const refreshed = await reviewService.getByProperty(property._id);
+      setReviews(Array.isArray(refreshed?.data) ? refreshed.data : []);
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Failed to submit review");
+    } finally {
+      setSubmittingReview(false);
     }
   };
 
@@ -658,6 +803,16 @@ export default function PropertyDetailPage() {
                 </p>
               </Section>
 
+              <ReviewSection
+                reviews={reviews}
+                loading={reviewsLoading}
+                user={user}
+                onSubmitReview={handleSubmitReview}
+                submittingReview={submittingReview}
+                reviewForm={reviewForm}
+                setReviewForm={setReviewForm}
+              />
+
               {property.amenities?.length > 0 && (
                 <Section title="Amenities">
                   <div className="flex flex-wrap gap-2">
@@ -728,7 +883,9 @@ export default function PropertyDetailPage() {
                 </div>
               )}
 
-              <InquiryForm propertyId={property._id} />
+              <div id="contact-owner">
+                <InquiryForm propertyId={property._id} />
+              </div>
 
               {/* Schedule a Visit Button */}
               <button

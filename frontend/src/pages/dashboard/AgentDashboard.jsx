@@ -52,6 +52,26 @@ const getVisitPropertyId = (visit) =>
 
 const getVisitBuyer = (visit) => visit?.buyer || visit?.user || visit?.buyerInfo || null
 
+const getLeadContact = (lead) => lead?.user || lead?.buyer || lead?.sender || lead?.createdBy || null
+
+const getLeadName = (lead) =>
+  lead?.name ||
+  getLeadContact(lead)?.name ||
+  getLeadContact(lead)?.username ||
+  lead?.buyer_name ||
+  'Buyer'
+
+const getLeadEmail = (lead) =>
+  lead?.email ||
+  getLeadContact(lead)?.email ||
+  ''
+
+const getLeadPhone = (lead) =>
+  lead?.phone ||
+  getLeadContact(lead)?.phone ||
+  getLeadContact(lead)?.mobile ||
+  ''
+
 const extractThreads = (payload) => {
   if (Array.isArray(payload)) return payload
   if (Array.isArray(payload?.data)) return payload.data
@@ -116,6 +136,8 @@ function LeadCard({ lead, onRespond, onOpenConversation }) {
   const [replying, setReplying] = useState(false)
   const [reply, setReply] = useState('')
   const [loading, setLoading] = useState(false)
+  const leadName = getLeadName(lead)
+  const contactLine = [getLeadEmail(lead), getLeadPhone(lead)].filter(Boolean).join(' · ')
 
   const handleRespond = async () => {
     if (!reply.trim()) return
@@ -137,11 +159,11 @@ function LeadCard({ lead, onRespond, onOpenConversation }) {
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'start', marginBottom:10 }}>
         <div style={{ display:'flex', alignItems:'center', gap:10 }}>
           <div style={{ width:36, height:36, borderRadius:'50%', background:'linear-gradient(135deg,#7c3aed,#6d28d9)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:13, fontWeight:800, color:'#fff' }}>
-            {getInitials(lead.name || lead.sender?.username || '?')}
+            {getInitials(leadName)}
           </div>
           <div>
-            <div style={{ fontSize:14, fontWeight:700, color:'#1a0a2e' }}>{lead.name || lead.sender?.username || 'Buyer'}</div>
-            <div style={{ fontSize:12, color:'rgba(26,10,46,0.5)' }}>{lead.email} · {lead.phone}</div>
+            <div style={{ fontSize:14, fontWeight:700, color:'#1a0a2e' }}>{leadName}</div>
+            {contactLine && <div style={{ fontSize:12, color:'rgba(26,10,46,0.5)' }}>{contactLine}</div>}
           </div>
         </div>
         <span style={{ fontSize:11.5, color:'rgba(26,10,46,0.4)' }}>{timeAgo(lead.createdAt)}</span>
@@ -624,7 +646,7 @@ export default function AgentDashboard() {
     .filter((lead) => {
       const keyword = leadSearch.trim().toLowerCase()
       if (!keyword) return true
-      const name = String(lead?.name || lead?.sender?.username || lead?.user?.name || '').toLowerCase()
+      const name = String(getLeadName(lead)).toLowerCase()
       return name.includes(keyword)
     })
 
@@ -746,7 +768,15 @@ export default function AgentDashboard() {
                 <div style={{ fontSize:13, color:'rgba(26,10,46,0.5)', marginTop:2 }}>{user?.email} · <span style={{ color:'#7c3aed', fontWeight:600, textTransform:'capitalize' }}>{user?.role}</span></div>
               </div>
             </div>
-            <div style={{ display:'flex', gap:10 }}>
+            <div style={{ display:'flex', gap:10, flexWrap:'wrap', justifyContent:'flex-end' }}>
+              <button
+                onClick={() => navigate('/')}
+                style={{ padding:'9px 18px', background:'#ffffff', border:'0.5px solid rgba(124,58,237,0.22)', borderRadius:9, color:'#7c3aed', fontSize:13, fontWeight:700, cursor:'pointer', transition:'all 0.2s' }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(124,58,237,0.08)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.transform = 'translateY(0)'; }}
+              >
+                ← Back to Website
+              </button>
               <NotificationBell user={user} />
               <button onClick={() => navigate('/protected/agent')} style={{ padding:'9px 18px', background:'linear-gradient(135deg,#7c3aed,#6d28d9)', border:'none', borderRadius:9, color:'#fff', fontSize:13, fontWeight:700, cursor:'pointer' }}>+ Post Property</button>
               <button onClick={() => { logout(); navigate('/') }} style={{ padding:'9px 14px', background:'rgba(124,58,237,0.08)', border:'0.5px solid rgba(124,58,237,0.2)', borderRadius:9, color:'#7c3aed', fontSize:13, fontWeight:600, cursor:'pointer' }}>Logout</button>
