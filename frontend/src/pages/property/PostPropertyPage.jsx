@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { propertyService } from "../../services"
+import { propertyService, saleRequestService } from "../../services"
 import { useAuth } from "../../context/AuthContext"
 import { toast } from "react-toastify"
 
@@ -25,7 +25,9 @@ export default function PostPropertyPage() {
     locality:"",
     area:"",
     bhk:"",
-    amenities:[]
+    amenities:[],
+    sellViaAgent:false,
+    sellViaAgentNote:"",
   })
   const [imageFiles, setImageFiles] = useState([])
   const [imagePreviews, setImagePreviews] = useState([])
@@ -90,7 +92,14 @@ export default function PostPropertyPage() {
         await propertyService.uploadImages(propertyId, formData)
       }
 
-      toast.success("Property Listed 🚀")
+      if (user?.role === 'owner' && data.sellViaAgent) {
+        await saleRequestService.create({
+          propertyId,
+          ownerMessage: data.sellViaAgentNote,
+        })
+      }
+
+      toast.success(data.sellViaAgent ? "Property listed and shared with agents" : "Property Listed 🚀")
       navigate(user?.role === 'owner' ? "/dashboard/owner" : "/dashboard/agent")
     } catch (error) {
       console.error(error)
@@ -231,6 +240,33 @@ export default function PostPropertyPage() {
                 <li><strong>Amenities:</strong> {data.amenities.length ? data.amenities.join(", ") : "None"}</li>
                 <li><strong>Images:</strong> {imageFiles.length} file(s) selected</li>
               </ul>
+              {user?.role === 'owner' && (
+                <div className="mt-4 pt-4 border-t border-[rgba(124,58,237,0.12)]">
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={data.sellViaAgent}
+                      onChange={(e) => set("sellViaAgent", e.target.checked)}
+                      className="mt-1 h-4 w-4 accent-[#7c3aed]"
+                    />
+                    <span>
+                      <span className="block font-semibold text-[#1a0a2e]">Sell via agent</span>
+                      <span className="block text-xs text-[rgba(26,10,46,0.55)]">
+                        Share this property with agents so one of them can accept and manage the sale for you.
+                      </span>
+                    </span>
+                  </label>
+                  {data.sellViaAgent && (
+                    <textarea
+                      rows={3}
+                      value={data.sellViaAgentNote}
+                      onChange={(e) => set("sellViaAgentNote", e.target.value)}
+                      placeholder="Optional note for agents about pricing, urgency, or preferred contact timing..."
+                      className="mt-3 w-full p-3 rounded-lg border border-[rgba(124,58,237,0.2)] bg-white text-[#1a0a2e] outline-none focus:border-[#7c3aed] focus:ring-1 focus:ring-[#7c3aed] transition resize-y"
+                    />
+                  )}
+                </div>
+              )}
             </div>
           )}
 

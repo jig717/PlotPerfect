@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { inquiryService, threadService } from '../../services'
+﻿import { useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { inquiryService, propertyService, threadService, userService } from '../../services'
 import { toast } from 'react-toastify'
 
 const listFrom = (payload) => {
@@ -13,6 +14,9 @@ const normalizeRole = (role) => String(role || '').trim().toLowerCase()
 const supportsInquiryAlerts = (role) =>
   ['agent', 'owner', 'admin', 'support'].includes(normalizeRole(role))
 
+const supportsAdminEntityAlerts = (role) =>
+  ['admin', 'support'].includes(normalizeRole(role))
+
 const getId = (value) => {
   if (!value) return null
   if (typeof value === 'string') return value
@@ -25,7 +29,7 @@ const compactText = (value, limit = 70) => {
   const text = String(value || '').trim()
   if (!text) return 'New update'
   if (text.length <= limit) return text
-  return `${text.slice(0, limit - 1)}…`
+  return `${text.slice(0, limit - 3)}...`
 }
 
 const formatTime = (value) => {
@@ -35,7 +39,17 @@ const formatTime = (value) => {
   return date.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
 }
 
+const getDashboardRoute = (role) => {
+  const normalized = normalizeRole(role)
+  if (normalized === 'admin') return '/admin'
+  if (normalized === 'support') return '/support'
+  if (normalized === 'agent') return '/dashboard/agent'
+  if (normalized === 'owner') return '/dashboard/owner'
+  return '/dashboard/buyer'
+}
+
 export default function NotificationBell({ user }) {
+  const navigate = useNavigate()
   const [isOpen, setIsOpen] = useState(false)
   const [items, setItems] = useState([])
   const [refreshToken, setRefreshToken] = useState(0)
@@ -185,12 +199,81 @@ export default function NotificationBell({ user }) {
         // silent polling failure
       }
 
+      try {
+        if (supportsAdminEntityAlerts(user?.role)) {
+          const [usersPayload, propertiesPayload] = await Promise.all([
+            userService.getAllUsers(),
+            propertyService.getAll({ limit: 100 }),
+          ])
+
+          listFrom(usersPayload).forEach((entry) => {
+            const entityId = entry?._id
+            const createdTs = entry?.createdAt ? new Date(entry.createdAt).getTime() : 0
+            if (!entityId || !createdTs) return
+
+            const sourceKey = `user:${entityId}`
+            if (booting) {
+              seen[sourceKey] = Math.max(Number(seen[sourceKey] || 0), createdTs)
+              return
+            }
+            if (createdTs <= Number(seen[sourceKey] || 0)) return
+
+            seen[sourceKey] = createdTs
+            incoming.push({
+              id: `${sourceKey}:${createdTs}`,
+              sourceKey,
+              type: 'user',
+              entityId,
+              sender: entry?.name || entry?.email || 'New user',
+              preview: compactText(`${entry?.name || 'A new user'} joined as ${entry?.role || 'user'}`),
+              timestamp: createdTs,
+              read: false,
+            })
+          })
+
+          listFrom(propertiesPayload).forEach((entry) => {
+            const entityId = entry?._id
+            const createdTs = entry?.createdAt ? new Date(entry.createdAt).getTime() : 0
+            if (!entityId || !createdTs) return
+
+            const sourceKey = `property:${entityId}`
+            if (booting) {
+              seen[sourceKey] = Math.max(Number(seen[sourceKey] || 0), createdTs)
+              return
+            }
+            if (createdTs <= Number(seen[sourceKey] || 0)) return
+
+            seen[sourceKey] = createdTs
+            incoming.push({
+              id: `${sourceKey}:${createdTs}`,
+              sourceKey,
+              type: 'property',
+              entityId,
+              sender: entry?.owner?.name || entry?.title || 'New property',
+              preview: compactText(`New property listed: ${entry?.title || 'Untitled property'}`),
+              timestamp: createdTs,
+              read: false,
+            })
+          })
+        }
+      } catch {
+        // silent polling failure
+      }
+
       if (cancelled) return
       persistSeen(seen)
       if (incoming.length > 0 && bootRef.current) {
         const newest = [...incoming].sort((a, b) => b.timestamp - a.timestamp)[0]
         if (newest) {
-          toast.info(`${newest.type === 'inquiry' ? 'New inquiry' : 'New message'} from ${newest.sender}`)
+          const label =
+            newest.type === 'inquiry'
+              ? 'New inquiry'
+              : newest.type === 'user'
+                ? 'New user'
+                : newest.type === 'property'
+                  ? 'New property'
+                  : 'New message'
+          toast.info(`${label} from ${newest.sender}`)
         }
       }
       mergeItems(incoming)
@@ -246,6 +329,18 @@ export default function NotificationBell({ user }) {
         // ignore mark-read failures
       }
     }
+  }
+
+  const openNotification = async (item) => {
+    await markAsRead(item)
+    setIsOpen(false)
+
+    if (item.type === 'property' && item.entityId) {
+      navigate(`/property/${item.entityId}`)
+      return
+    }
+
+    navigate(getDashboardRoute(user?.role))
   }
 
   return (
@@ -351,13 +446,19 @@ export default function NotificationBell({ user }) {
                     {item.preview}
                   </div>
                   <div style={{ fontSize: 10.5, color: 'rgba(26,10,46,0.5)', marginBottom: 8 }}>
-                    {item.type === 'message' ? 'New message' : 'New inquiry'}
+                    {item.type === 'message'
+                      ? 'New message'
+                      : item.type === 'inquiry'
+                        ? 'New inquiry'
+                        : item.type === 'user'
+                          ? 'New user registration'
+                          : 'New property listing'}
                   </div>
-                  {!item.read && (
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     <button
                       type="button"
-                      onClick={() => markAsRead(item)}
-                      aria-label={`Mark notification from ${item.sender} as read`}
+                      onClick={() => openNotification(item)}
+                      aria-label={`Open notification from ${item.sender}`}
                       style={{
                         border: '1px solid rgba(124,58,237,0.25)',
                         borderRadius: 8,
@@ -369,9 +470,28 @@ export default function NotificationBell({ user }) {
                         cursor: 'pointer',
                       }}
                     >
-                      Mark as read
+                      Open
                     </button>
-                  )}
+                    {!item.read && (
+                      <button
+                        type="button"
+                        onClick={() => markAsRead(item)}
+                        aria-label={`Mark notification from ${item.sender} as read`}
+                        style={{
+                          border: '1px solid rgba(124,58,237,0.18)',
+                          borderRadius: 8,
+                          background: '#f5f3ff',
+                          color: '#7c3aed',
+                          fontSize: 11.5,
+                          fontWeight: 700,
+                          padding: '4px 8px',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Mark as read
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -381,3 +501,4 @@ export default function NotificationBell({ user }) {
     </div>
   )
 }
+

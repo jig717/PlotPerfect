@@ -1,12 +1,12 @@
-import { useState, useEffect } from 'react'
+﻿import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
-import { userService, propertyService, inquiryService } from '../../services'
+import { userService, propertyService, inquiryService, paymentService } from '../../services'
 import { formatPrice, timeAgo, getInitials } from '../../utils/index'
 import { toast } from 'react-toastify'
 import NotificationBell from '../../Components/ui/NotificationBell'
 import ThreadPanel from '../../Components/messaging/ThreadPanel'
-// Chart.js imports – added for Reports tab
+// Chart.js imports added for Reports tab
 import { Bar, Pie } from 'react-chartjs-2'
 import {
   Chart as ChartJS,
@@ -29,7 +29,7 @@ ChartJS.register(
   ArcElement
 )
 
-const TABS = ['Overview', 'Users', 'Properties', 'Inquiries', 'Reports']
+const TABS = ['Overview', 'Users', 'Properties', 'Inquiries', 'Payments', 'Reports']
 
 // ---------- Helper chart components (new, but no existing names are changed) ----------
 function PropertyTrendChart({ properties }) {
@@ -243,7 +243,54 @@ function StatCard({ icon, label, value, change }) {
   )
 }
 
-function UserRow({ user, onDelete }) {
+function EditUserModal({ user, onClose, onSave, saving }) {
+  const [form, setForm] = useState({
+    name: user?.name || '',
+    email: user?.email || '',
+    role: user?.role || 'buyer',
+  })
+
+  useEffect(() => {
+    setForm({
+      name: user?.name || '',
+      email: user?.email || '',
+      role: user?.role || 'buyer',
+    })
+  }, [user?._id, user?.name, user?.email, user?.role])
+
+  if (!user) return null
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.48)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, zIndex: 1400 }}>
+      <div style={{ width: 'min(100%, 460px)', background: '#fff', borderRadius: 22, padding: 24, boxShadow: '0 30px 80px rgba(15,23,42,0.24)' }}>
+        <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 24, fontWeight: 800, color: '#1a0a2e', marginBottom: 18 }}>
+          Edit User
+        </div>
+        <div style={{ display: 'grid', gap: 14 }}>
+          <input value={form.name} onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))} placeholder="Name" style={{ height: 46, borderRadius: 12, border: '1px solid rgba(124,58,237,0.18)', padding: '0 14px', outline: 'none' }} />
+          <input value={form.email} onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))} placeholder="Email" style={{ height: 46, borderRadius: 12, border: '1px solid rgba(124,58,237,0.18)', padding: '0 14px', outline: 'none' }} />
+          <select value={form.role} onChange={(e) => setForm((prev) => ({ ...prev, role: e.target.value }))} style={{ height: 46, borderRadius: 12, border: '1px solid rgba(124,58,237,0.18)', padding: '0 14px', outline: 'none' }}>
+            <option value="buyer">Buyer</option>
+            <option value="owner">Owner</option>
+            <option value="agent">Agent</option>
+            <option value="support">Support</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 20 }}>
+          <button onClick={onClose} disabled={saving} style={{ padding: '10px 16px', borderRadius: 12, border: '1px solid rgba(124,58,237,0.18)', background: '#fff', color: '#7c3aed', fontWeight: 700, cursor: 'pointer' }}>
+            Cancel
+          </button>
+          <button onClick={() => onSave?.(form)} disabled={saving} style={{ padding: '10px 16px', borderRadius: 12, border: 'none', background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', color: '#fff', fontWeight: 700, cursor: 'pointer', opacity: saving ? 0.7 : 1 }}>
+            {saving ? 'Saving...' : 'Save Changes'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function UserRow({ user, onDelete, onEdit }) {
   return (
     <div 
       style={{ 
@@ -283,6 +330,7 @@ function UserRow({ user, onDelete }) {
       </div>
       <div style={{ display: 'flex', gap: 8 }}>
         <button 
+          onClick={() => onEdit?.(user)}
           style={{ 
             padding: '6px 14px', borderRadius: 8, border: '1px solid rgba(124,58,237,0.3)', 
             background: 'none', color: '#7c3aed', fontSize: 12, fontWeight: 600, 
@@ -350,7 +398,7 @@ function PropertyRow({ prop, onDelete }) {
         {prop.images?.[0] ? (
           <img src={prop.images[0]} alt={prop.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         ) : (
-          '🏠'
+          'IMG'
         )}
       </div>
       <div>
@@ -424,26 +472,33 @@ export default function AdminDashboard() {
   const [users, setUsers] = useState([])
   const [properties, setProperties] = useState([])
   const [inquiries, setInquiries] = useState([])
+  const [payments, setPayments] = useState([])
   const [inquirySearch, setInquirySearch] = useState('')
   const [activeInquiry, setActiveInquiry] = useState(null)
+  const [editingUser, setEditingUser] = useState(null)
+  const [savingUser, setSavingUser] = useState(false)
   const [stats, setStats] = useState({})
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     (async () => {
       try {
-        const [usersRes, propsRes, inquiriesRes] = await Promise.allSettled([
-          userService.getAllUsers?.() || Promise.resolve({ data: [] }),
+        const [usersRes, propsRes, inquiriesRes, paymentsRes] = await Promise.allSettled([
+          userService.getAllUsers(),
           propertyService.getAll({ limit: 100 }),
-          inquiryService.getAll?.() || Promise.resolve({ data: [] })
+          inquiryService.getAll(),
+          paymentService.getAll(),
         ])
         if (usersRes.status === 'fulfilled') setUsers(usersRes.value.data || [])
         if (propsRes.status === 'fulfilled') setProperties(propsRes.value.data || [])
         if (inquiriesRes.status === 'fulfilled') setInquiries(inquiriesRes.value.data || [])
+        if (paymentsRes.status === 'fulfilled') setPayments(paymentsRes.value.data || [])
         setStats({
           totalUsers: usersRes.value?.data?.length || 0,
           totalProperties: propsRes.value?.data?.length || 0,
           totalInquiries: inquiriesRes.value?.data?.length || 0,
+          totalPayments: paymentsRes.value?.data?.length || 0,
+          totalRevenue: (paymentsRes.value?.data || []).reduce((sum, payment) => sum + Number(payment?.amount || 0), 0),
         })
       } catch (error) {
         toast.error('Failed to load dashboard data')
@@ -456,7 +511,7 @@ export default function AdminDashboard() {
   const handleDeleteUser = async (id) => {
     if (!window.confirm('Delete user?')) return
     try {
-      await userService.deleteUser?.(id)
+      await userService.deleteUser(id)
       setUsers(users.filter(u => u._id !== id))
       toast.success('User deleted')
     } catch {
@@ -475,6 +530,22 @@ export default function AdminDashboard() {
     }
   }
 
+  const handleSaveUser = async (payload) => {
+    if (!editingUser?._id) return
+    setSavingUser(true)
+    try {
+      const response = await userService.updateUser(editingUser._id, payload)
+      const nextUser = response?.data || response
+      setUsers((prev) => prev.map((entry) => (entry._id === editingUser._id ? { ...entry, ...nextUser } : entry)))
+      setEditingUser(null)
+      toast.success('User updated successfully')
+    } catch (error) {
+      toast.error(error?.response?.data?.message || 'Failed to update user')
+    } finally {
+      setSavingUser(false)
+    }
+  }
+
   const filteredInquiries = inquiries
     .slice()
     .sort((a, b) => new Date(b?.createdAt || 0) - new Date(a?.createdAt || 0))
@@ -489,10 +560,10 @@ export default function AdminDashboard() {
     // Overview (unchanged)
     <div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(240px,1fr))', gap: 20, marginBottom: 32 }}>
-        <StatCard icon="👥" label="Total Users" value={stats.totalUsers} change="+12%" />
-        <StatCard icon="🏘" label="Properties" value={stats.totalProperties} change="+8%" />
-        <StatCard icon="💬" label="Inquiries" value={stats.totalInquiries} change="+5%" />
-        <StatCard icon="💰" label="Revenue" value="₹24.5L" change="+15%" />
+        <StatCard icon="US" label="Total Users" value={stats.totalUsers} change="+12%" />
+        <StatCard icon="PR" label="Properties" value={stats.totalProperties} change="+8%" />
+        <StatCard icon="IN" label="Inquiries" value={stats.totalInquiries} change="+5%" />
+        <StatCard icon="PM" label="Revenue" value={formatPrice(stats.totalRevenue || 0)} change={`${stats.totalPayments || 0} payments`} />
       </div>
     </div>,
 
@@ -502,10 +573,10 @@ export default function AdminDashboard() {
         <span style={{ fontSize: 18, fontWeight: 700, color: '#1a0a2e' }}>{users.length} Users</span>
       </div>
       {users.length === 0 ? (
-        <EmptyState icon="👥" title="No users" sub="Users will appear here" />
+        <EmptyState icon="US" title="No users" sub="Users will appear here" />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {users.map(u => <UserRow key={u._id} user={u} onDelete={handleDeleteUser} />)}
+          {users.map(u => <UserRow key={u._id} user={u} onDelete={handleDeleteUser} onEdit={setEditingUser} />)}
         </div>
       )}
     </div>,
@@ -516,7 +587,7 @@ export default function AdminDashboard() {
         <span style={{ fontSize: 18, fontWeight: 700, color: '#1a0a2e' }}>{properties.length} Properties</span>
       </div>
       {properties.length === 0 ? (
-        <EmptyState icon="🏘" title="No properties" sub="Properties will appear here" />
+        <EmptyState icon="PR" title="No properties" sub="Properties will appear here" />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {properties.map(p => <PropertyRow key={p._id} prop={p} onDelete={handleDeleteProperty} />)}
@@ -537,7 +608,7 @@ export default function AdminDashboard() {
         style={{ width: '100%', maxWidth: 320, height: 36, borderRadius: 10, border: '1px solid rgba(124,58,237,0.2)', background: '#faf8ff', color: '#1a0a2e', padding: '0 12px', fontSize: 13, marginBottom: 14, outline: 'none' }}
       />
       {inquiries.length === 0 ? (
-        <EmptyState icon="💬" title="No inquiries" sub="Inquiries from users will appear here" />
+        <EmptyState icon="IN" title="No inquiries" sub="Inquiries from users will appear here" />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {filteredInquiries.map(inq => (
@@ -589,14 +660,27 @@ export default function AdminDashboard() {
       )}
     </div>,
 
-    // Reports – now with real data (replaces placeholder)
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <span style={{ fontSize: 18, fontWeight: 700, color: '#1a0a2e' }}>{payments.length} Payments</span>
+      </div>
+      {payments.length === 0 ? (
+        <EmptyState icon="PM" title="No payments yet" sub="Advance payments, tokens, and sale closures will appear here." />
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {payments.map((payment) => <PaymentRow key={payment._id} payment={payment} />)}
+        </div>
+      )}
+    </div>,
+
+    // Reports now with real data
     <div>
       {/* Key metrics */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(240px,1fr))', gap: 20, marginBottom: 32 }}>
-        <StatCard icon="🏘" label="Total Properties" value={stats.totalProperties} />
-        <StatCard icon="👥" label="Total Users" value={stats.totalUsers} />
-        <StatCard icon="💬" label="Total Inquiries" value={stats.totalInquiries} />
-        <StatCard icon="📈" label="Avg. Properties per User" value={stats.totalUsers ? (stats.totalProperties / stats.totalUsers).toFixed(1) : 0} />
+        <StatCard icon="PR" label="Total Properties" value={stats.totalProperties} />
+        <StatCard icon="US" label="Total Users" value={stats.totalUsers} />
+        <StatCard icon="IN" label="Total Inquiries" value={stats.totalInquiries} />
+        <StatCard icon="AVG" label="Avg. Properties per User" value={stats.totalUsers ? (stats.totalProperties / stats.totalUsers).toFixed(1) : 0} />
       </div>
 
       {/* Charts row 1 */}
@@ -649,7 +733,7 @@ export default function AdminDashboard() {
                   Admin Dashboard
                 </div>
                 <div style={{ fontSize: 13, color: 'rgba(26,10,46,0.5)', marginTop: 2 }}>
-                  {user?.email} · <span style={{ color: '#7c3aed', fontWeight: 600, textTransform: 'capitalize' }}>{user?.role}</span>
+                  {user?.email} | <span style={{ color: '#7c3aed', fontWeight: 600, textTransform: 'capitalize' }}>{user?.role}</span>
                 </div>
               </div>
             </div>
@@ -670,7 +754,7 @@ export default function AdminDashboard() {
                   e.currentTarget.style.transform = 'translateY(0)';
                 }}
               >
-                ← Back to Website
+                Back to Website
               </button>
               <NotificationBell user={user} />
               <button 
@@ -743,7 +827,45 @@ export default function AdminDashboard() {
           onClose={() => setActiveInquiry(null)}
         />
       )}
+      <EditUserModal
+        user={editingUser}
+        onClose={() => setEditingUser(null)}
+        onSave={handleSaveUser}
+        saving={savingUser}
+      />
       <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.6}}`}</style>
     </div>
   )
 }
+
+function PaymentRow({ payment }) {
+  return (
+    <div style={{ padding: '16px 18px', background: '#ffffff', border: '1px solid rgba(124,58,237,0.08)', borderRadius: 14 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+        <div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: '#1a0a2e' }}>
+            {payment?.property?.title || 'Property Payment'}
+          </div>
+          <div style={{ fontSize: 12.5, color: 'rgba(26,10,46,0.56)', marginTop: 4 }}>
+            Buyer: {payment?.user?.name || payment?.user?.email || 'Buyer'} | Owner: {payment?.recipient?.name || payment?.recipient?.email || 'Owner'}
+          </div>
+          <div style={{ fontSize: 12.5, color: 'rgba(26,10,46,0.56)', marginTop: 4 }}>
+            Type: {payment?.paymentType === 'advance_token' ? 'Advance Payment / Token' : 'Sale Closure'} | Method: {payment?.paymentMethod}
+          </div>
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 22, fontWeight: 800, color: '#1a0a2e' }}>
+            {formatPrice(payment?.amount || 0)}
+          </div>
+          <div style={{ fontSize: 12.5, color: payment?.status === 'completed' ? '#16a34a' : '#7c3aed', fontWeight: 700, textTransform: 'uppercase' }}>
+            {payment?.status}
+          </div>
+          <div style={{ fontSize: 12, color: 'rgba(26,10,46,0.45)', marginTop: 4 }}>
+            {timeAgo(payment?.createdAt)}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+

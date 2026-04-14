@@ -27,6 +27,7 @@ export const threadService = {
 };
 export const propertyService = {
   getAll: params => api.get('/property/all', { params }),
+  getFilters: () => api.get('/property/filters'),
   getById: id => api.get(`/property/${id}`),
   create: data => api.post('/property', data),
   update: (id, data) => api.put(`/property/${id}`, data),
@@ -46,6 +47,8 @@ export const reviewService = {
 }
 
 export const userService = {
+  getAllUsers: () => api.get('/user/all'),
+  getById: (id) => api.get(`/user/${id}`),
   getProfile: () => api.get('/user/profile'),
   updateProfile: data => {
     const isFormData = typeof FormData !== 'undefined' && data instanceof FormData
@@ -53,6 +56,8 @@ export const userService = {
       ? { headers: { 'Content-Type': 'multipart/form-data' } }
       : undefined)
   },
+  updateUser: (id, data) => api.put(`/user/${id}`, data),
+  deleteUser: (id) => api.delete(`/user/${id}`),
   getSaved: (userId) => api.get(`/favorite/${userId}`),      
   saveProperty: (userId, propertyId) => api.post('/favorite', { userId, propertyId }),
   unsave: (favoriteId) => api.delete(`/favorite/${favoriteId}`),
@@ -64,6 +69,32 @@ export const agentService = {
   getStats: () => api.get('/agent/stats'),
   getDailyViews: () => api.get('/agent/daily-views'),
   getLeadSources: () => api.get('/agent/lead-sources'),
+  getCommissions: () => api.get('/agent/commissions'),
+};
+
+export const saleRequestService = {
+  create: (data) => api.post('/sale-requests', data),
+  getOwnerRequests: () => api.get('/sale-requests/owner'),
+  getAgentOpenRequests: () => api.get('/sale-requests/agent/open'),
+  getAgentRequests: () => api.get('/sale-requests/agent/mine'),
+  accept: (id) => api.post(`/sale-requests/${id}/accept`),
+  markSold: (id, data) => api.post(`/sale-requests/${id}/sold`, data),
+  updatePayment: (id, data) => api.patch(`/sale-requests/${id}/payment`, data),
+};
+
+export const paymentService = {
+  create: (data) => api.post('/payment', data),
+  createAdvanceTokenOrder: (data) => api.post('/payment/advance-token/order', data),
+  verifyAdvanceToken: (data) => api.post('/payment/advance-token/verify', data),
+  createFullPaymentOrder: (data) => api.post('/payment/full-payment/order', data),
+  verifyFullPayment: (data) => api.post('/payment/full-payment/verify', data),
+  downloadInvoice: (paymentId) => api.get(`/payment/${paymentId}/invoice`, {
+    responseType: 'blob',
+    headers: { Accept: 'text/html' },
+  }),
+  getForUser: (userId) => api.get(`/payment/user/${userId}`),
+  getAll: () => api.get('/payment/all'),
+  update: (id, data) => api.put(`/payment/${id}`, data),
 };
 
 

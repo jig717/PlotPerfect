@@ -144,6 +144,9 @@ export default function PropertyCard({ card, index }) {
   }
 
   const imageUrl = getImageUrl(card.image)
+  const normalizedStatus = String(card.status || '').toUpperCase()
+  const isBooked = normalizedStatus === 'BOOKED'
+  const bookingBadge = card.badge || card.listingLabel || 'Booked'
 
   return (
     <div
@@ -180,8 +183,8 @@ export default function PropertyCard({ card, index }) {
           </div>
         )}
 
-        <span className={`cb absolute top-2.5 left-2.5 text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wide ${card.cls}`} style={{ background: card.bc }}>
-          {card.badge}
+        <span className={`cb absolute top-2.5 left-2.5 text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wide ${card.cls}`} style={{ background: isBooked ? '#0f766e' : card.bc }}>
+          {isBooked ? bookingBadge : card.badge}
         </span>
         {card.isNew && (
           <span className="cb cb-new absolute top-2.5 right-11 bg-white/20 backdrop-blur-md border border-white/30 text-white text-[10px] font-bold px-2 py-1 rounded uppercase">

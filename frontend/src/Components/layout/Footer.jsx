@@ -101,8 +101,8 @@ export default function Footer() {
         </div>
 
         <div className="border-t border-white/5 pt-5 flex justify-between flex-wrap gap-2.5">
-          <span className="text-xs text-white/20">� 2026 PlotPerfect Pvt. Ltd. All rights reserved.</span>
-          <span className="text-xs text-white/20">Made with <span className="text-[#7c3aed]">?</span> for India</span>
+          <span className="text-xs text-white/20">🩷 2026 PlotPerfect Pvt. Ltd. All rights reserved.</span>
+          <span className="text-xs text-white/20">Made with <span className="text-[#7c3aed]">🩷</span> for India</span>
         </div>
       </div>
     </footer>

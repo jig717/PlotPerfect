@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
-import { propertyService, inquiryService, reviewService } from "../../services";
+import { propertyService, inquiryService, reviewService, paymentService } from "../../services";
 import { useAuth } from "../../context/AuthContext";
 import { formatPrice, timeAgo, getInitials } from "../../utils/index";
 import api from "../../services/api";
@@ -9,6 +9,7 @@ import visitService from "../../services/visitService";
 
 // Cloudinary configuration
 const CLOUD_NAME = import.meta.env.CLOUDINARY_CLOUD_NAME;
+const LOGO_URL = "https://checkout.razorpay.com/v1/logo.png"; // Fallback placeholder
 
 // MOCK only for development when backend is down
 const MOCK = {
@@ -40,6 +41,146 @@ const getImageUrl = (publicId, width, height) => {
   if (publicId.startsWith("http")) return publicId;
   if (!CLOUD_NAME) return `https://picsum.photos/id/104/${width}/${height}`;
   return `https://res.cloudinary.com/${CLOUD_NAME}/image/upload/w_${width},h_${height},c_fill,q_auto,f_auto/${publicId}`;
+};
+
+const formatPlanPrice = (value) => {
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount <= 0) return "Price on request";
+  if (amount >= 10000000) return `₹ ${(amount / 10000000).toFixed(amount % 10000000 === 0 ? 0 : 2)} Cr`;
+  if (amount >= 100000) return `₹ ${(amount / 100000).toFixed(amount % 100000 === 0 ? 0 : 2)} L`;
+  return formatPrice(amount);
+};
+
+const isValidEmail = (value) =>
+  /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || "").trim());
+
+const normalizeRazorpayContact = (value) => {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+
+  const digitsOnly = raw.replace(/[^\d+]/g, "");
+  if (digitsOnly.startsWith("+") && digitsOnly.length >= 11 && digitsOnly.length <= 16) {
+    return digitsOnly;
+  }
+
+  const numeric = raw.replace(/\D/g, "");
+  if (numeric.length === 10) return `+91${numeric}`;
+  if (numeric.length === 12 && numeric.startsWith("91")) return `+${numeric}`;
+  if (numeric.length >= 11 && numeric.length <= 15) return `+${numeric}`;
+  return "";
+};
+
+const loadRazorpayCheckout = () =>
+  new Promise((resolve, reject) => {
+    // 1. If already loaded, resolve immediately
+    if (window.Razorpay) {
+      resolve(window.Razorpay);
+      return;
+    }
+
+    // 2. Check for existing script (prevent duplicates)
+    const existingScript = document.querySelector('script[data-razorpay-checkout="true"]');
+    if (existingScript) {
+      // If script is already there, wait for it to finish loading
+      existingScript.addEventListener("load", () => resolve(window.Razorpay));
+      existingScript.addEventListener("error", () => reject(new Error("Razorpay SDK failed to load (existing script tag).")));
+      return;
+    }
+
+    // 3. Otherwise, create and inject the script
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.async = true;
+    script.dataset.razorpayCheckout = "true";
+
+    script.onload = () => {
+      if (window.Razorpay) {
+        resolve(window.Razorpay);
+      } else {
+        reject(new Error("Razorpay SDK was loaded but window.Razorpay is missing."));
+      }
+    };
+    script.onerror = () => reject(new Error("Failed to load Razorpay SDK. Check your network."));
+
+    document.body.appendChild(script);
+  });
+
+const getFullPaymentLabel = (property) => {
+  const listingType = String(property?.listingType || property?.purpose || "").toLowerCase();
+  return ["rent", "pg"].includes(listingType) ? "Pay Full Amount" : "Pay Full Price";
+};
+
+const triggerInvoiceDownload = async (paymentId) => {
+  if (!paymentId) return;
+
+  const invoiceBlob = await paymentService.downloadInvoice(paymentId);
+  const downloadUrl = window.URL.createObjectURL(invoiceBlob);
+  const anchor = document.createElement("a");
+  anchor.href = downloadUrl;
+  anchor.download = `plotperfect-invoice-${paymentId}.html`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.URL.revokeObjectURL(downloadUrl);
+};
+
+const getPaymentErrorMessage = (error, fallbackMessage) => {
+  const payload = error?.response?.data;
+  const message = payload?.message || error?.message || fallbackMessage;
+  const details = payload?.details;
+
+  if (details && typeof details === "object") {
+    const detailParts = [
+      details.purpose ? `purpose: ${details.purpose}` : "",
+      details.type ? `type: ${details.type}` : "",
+      details.status ? `status: ${details.status}` : "",
+      typeof details.price === "number" ? `price: ${details.price}` : "",
+    ].filter(Boolean);
+
+    if (detailParts.length) {
+      return `${message} (${detailParts.join(", ")})`;
+    }
+  }
+
+  return message;
+};
+
+const normalizeFloorPlans = (property) => {
+  const plans = Array.isArray(property?.floorPlans) ? property.floorPlans : [];
+  if (plans.length > 0) {
+    return plans.map((plan, index) => ({
+      id: plan._id || `${plan.title || plan.label || "plan"}-${index}`,
+      title: plan.title || plan.label || `${plan.beds || property?.bhk || ""} BHK`.trim() || `Plan ${index + 1}`,
+      area: plan.area || property?.area || "",
+      carpetArea: plan.carpetArea || `${plan.beds || property?.bhk || ""} BHK`.trim(),
+      price: plan.price ?? property?.price,
+      possession: plan.possession || "",
+      launchStatus: plan.launchStatus || "",
+      image: plan.image || property?.primaryImage || property?.images?.[0] || "",
+      imageAlt: plan.imageAlt || `${plan.title || plan.label || "Floor plan"} image`,
+      beds: plan.beds ?? property?.bhk ?? null,
+      baths: plan.baths ?? property?.baths ?? null,
+    }));
+  }
+
+  if (!property) return [];
+
+  const fallbackTitle = `${property.bhk || ""} BHK`.trim() || "Floor Plan";
+  return [
+    {
+      id: "default-plan",
+      title: fallbackTitle,
+      area: property.area || "",
+      carpetArea: fallbackTitle,
+      price: property.price,
+      possession: "",
+      launchStatus: property.status === "PENDING" ? "New Launch" : "",
+      image: property.primaryImage || property.images?.[0] || "",
+      imageAlt: `${fallbackTitle} image`,
+      beds: property.bhk ?? null,
+      baths: property.baths ?? null,
+    },
+  ].filter((plan) => plan.title || plan.area || plan.price || plan.image);
 };
 
 function Gallery({ images = [], title }) {
@@ -119,6 +260,102 @@ function Section({ title, children }) {
       </h3>
       {children}
     </div>
+  );
+}
+
+function FloorPlansSection({ property }) {
+  const floorPlans = normalizeFloorPlans(property);
+  const [activePlanId, setActivePlanId] = useState(floorPlans[0]?.id || null);
+
+  useEffect(() => {
+    setActivePlanId(floorPlans[0]?.id || null);
+  }, [property?._id, floorPlans.length]);
+
+  if (!floorPlans.length) return null;
+
+  const activePlan = floorPlans.find((plan) => plan.id === activePlanId) || floorPlans[0];
+
+  return (
+    <Section title="Floor Plans & Pricing">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div className="flex flex-wrap gap-2">
+          {floorPlans.map((plan) => (
+            <button
+              key={plan.id}
+              type="button"
+              onClick={() => setActivePlanId(plan.id)}
+              className={`px-4 py-2 rounded-full text-sm border transition ${
+                activePlan?.id === plan.id
+                  ? "bg-[#eef4ff] border-[#93c5fd] text-[#0f3d91] font-semibold"
+                  : "bg-white border-[rgba(124,58,237,0.14)] text-[rgba(26,10,46,0.7)] hover:border-[#93c5fd]"
+              }`}
+            >
+              {plan.title}
+            </button>
+          ))}
+        </div>
+        <a
+          href="#contact-owner"
+          className="text-sm font-semibold text-[#0f62fe] hover:text-[#0b4ecc] transition"
+        >
+          View Homes in 3D
+        </a>
+      </div>
+
+      <div className="rounded-[28px] border border-[#e6eefc] bg-linear-to-br from-[#f7fbff] via-[#f7faff] to-[#eef5ff] p-5">
+        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-[rgba(15,61,145,0.5)] mb-4">
+          {floorPlans.length} Floor Plan{floorPlans.length > 1 ? "s" : ""} Available
+        </div>
+
+        <div className="max-w-sm rounded-3xl border border-[#dbe8ff] bg-white shadow-[0_18px_45px_rgba(62,104,179,0.08)] p-4">
+          <div className="flex items-start justify-between gap-3 mb-3">
+            <div>
+              <div className="text-lg font-bold text-[#12315f]">
+                {activePlan.area ? `${activePlan.area} sqft.` : activePlan.title}
+              </div>
+              <div className="text-sm text-[rgba(18,49,95,0.6)] mt-1">
+                {activePlan.carpetArea || activePlan.title}
+              </div>
+            </div>
+            <div className="min-w-10 h-10 rounded-2xl bg-[#f2f7ff] flex items-center justify-center text-[#2d6cdf] text-lg">
+              ⌂
+            </div>
+          </div>
+
+          <div className="rounded-[20px] bg-[#fbfdff] border border-[#edf3ff] p-3 mb-4 min-h-52.5 flex items-center justify-center overflow-hidden">
+            {activePlan.image ? (
+              <img
+                src={getImageUrl(activePlan.image, 520, 340)}
+                alt={activePlan.imageAlt}
+                className="w-full h-full max-h-55 object-contain"
+              />
+            ) : (
+              <div className="text-sm text-[rgba(18,49,95,0.45)]">No floor plan image available</div>
+            )}
+          </div>
+
+          <div className="text-3xl font-bold text-[#0d2d63] mb-2">{formatPlanPrice(activePlan.price)}</div>
+
+          {(activePlan.launchStatus || activePlan.possession) && (
+            <div className="rounded-2xl bg-[#f7f9fc] border border-[#edf2fa] px-4 py-3 text-sm text-[rgba(18,49,95,0.72)] space-y-1">
+              {activePlan.launchStatus && <div>{activePlan.launchStatus}</div>}
+              {activePlan.possession && <div>{activePlan.possession}</div>}
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={() => {
+              const target = document.getElementById("contact-owner");
+              target?.scrollIntoView({ behavior: "smooth", block: "start" });
+            }}
+            className="mt-4 text-sm font-semibold text-[#0f62fe] hover:text-[#0b4ecc] transition"
+          >
+            Request callback
+          </button>
+        </div>
+      </div>
+    </Section>
   );
 }
 
@@ -208,6 +445,11 @@ function InquiryForm({ propertyId }) {
       navigate("/login");
       return;
     }
+    if (user.role !== "buyer") {
+      toast.error("Only buyer accounts can send inquiries.");
+      navigate("/login");
+      return;
+    }
     if (!propertyId || propertyId.length !== 24) {
       toast.error("Invalid property ID. Please refresh the page.");
       return;
@@ -222,8 +464,15 @@ function InquiryForm({ propertyId }) {
       toast.success("Inquiry sent! The owner will contact you shortly.");
       setMessage("");
     } catch (error) {
-      console.error(error);
-      toast.error("Failed to send inquiry. Please try again.");
+      const status = error?.response?.status;
+      const errorMessage = error?.response?.data?.message || "";
+      if (status === 403) {
+        toast.error("Only buyer accounts can send inquiries.");
+        navigate("/login");
+      } else {
+        console.error(error);
+        toast.error(errorMessage || "Failed to send inquiry. Please try again.");
+      }
     } finally {
       setLoading(false);
     }
@@ -253,6 +502,7 @@ function InquiryForm({ propertyId }) {
 // ========== Schedule Visit Modal ==========
 function ScheduleVisitModal({ property, onClose, onSuccess }) {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [scheduledDate, setScheduledDate] = useState("");
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
@@ -263,6 +513,11 @@ function ScheduleVisitModal({ property, onClose, onSuccess }) {
     e.preventDefault();
     if (!user) {
       toast.error("Please login first");
+      return;
+    }
+    if (user.role !== "buyer") {
+      toast.error("Only buyer accounts can schedule a visit.");
+      navigate("/login");
       return;
     }
     if (!propertyId || String(propertyId).length !== 24) {
@@ -311,11 +566,21 @@ function ScheduleVisitModal({ property, onClose, onSuccess }) {
       onSuccess();
       onClose();
     } catch (err) {
-      console.error("Visit request failed:", err?.response?.data || err);
+      const errorMessage = err?.response?.data?.message || "";
       if (err?.response?.status === 403) {
-        toast.error("You are not allowed to schedule a visit with this account. Please login as buyer.");
+        toast.error("Only buyer accounts can schedule a visit.");
+        onClose();
+        navigate("/login");
+      } else if (
+        err?.response?.status === 400 &&
+        errorMessage.toLowerCase().includes("already have a pending or confirmed visit")
+      ) {
+        toast.info("You already have a visit request for this property. Opening your scheduled visits.");
+        onClose();
+        navigate("/dashboard/buyer");
       } else {
-        toast.error(err.response?.data?.message || "Failed to schedule");
+        console.error("Visit request failed:", err?.response?.data || err);
+        toast.error(errorMessage || "Failed to schedule");
       }
     } finally {
       setLoading(false);
@@ -384,6 +649,10 @@ export default function PropertyDetailPage() {
   const [favoriteId, setFavoriteId] = useState(null);
   const [isToggling, setIsToggling] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [showAdvancePaymentModal, setShowAdvancePaymentModal] = useState(false);
+  const [showFullPaymentModal, setShowFullPaymentModal] = useState(false);
+  const [hasExistingVisit, setHasExistingVisit] = useState(false);
+  const [checkingVisitStatus, setCheckingVisitStatus] = useState(false);
   const [reviews, setReviews] = useState([]);
   const [reviewsLoading, setReviewsLoading] = useState(false);
   const [submittingReview, setSubmittingReview] = useState(false);
@@ -396,39 +665,63 @@ export default function PropertyDetailPage() {
     return [];
   };
 
+  const loadPropertyDetails = async (propertyId, options = {}) => {
+    const { silent = false } = options;
+    
+    // Safety check: Prevent fetching if ID is missing or literally "undefined"
+    if (!propertyId || propertyId === "undefined") {
+      if (!silent) {
+        setLoading(false);
+        setError("Invalid property selection. Please go back and try again.");
+      }
+      return null;
+    }
+
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
+
+    try {
+      const data = await propertyService.getById(propertyId);
+      const nextProperty = data?.data || data || null;
+      if (!nextProperty) throw new Error("No property data received");
+      setProperty(nextProperty);
+      if (!silent) setError(null);
+      return nextProperty;
+    } catch (err) {
+      console.error("Property fetch error:", err);
+      if (!silent) {
+        const status = err.response?.status;
+        const message = err.response?.data?.message || err.message;
+        if (status === 500) {
+          setError("Server error. Please try again later.");
+        } else if (status === 404) {
+          setError("Property not found.");
+        } else {
+          setError(message || "Failed to load property details.");
+        }
+        if (import.meta.env.DEV && status !== 400 && propertyId !== "undefined") {
+          console.warn("Using mock property data (development only)");
+          setProperty(MOCK);
+          setError(null);
+          return MOCK;
+        }
+      }
+      throw err;
+    } finally {
+      if (!silent) setLoading(false);
+    }
+  };
+
   // FETCH PROPERTY with error handling
   useEffect(() => {
     let cancelled = false;
     const fetchProperty = async () => {
-      setLoading(true);
-      setError(null);
       try {
-        const data = await propertyService.getById(id);
-        if (!cancelled) {
-          if (data?.data) setProperty(data.data);
-          else if (data) setProperty(data);
-          else throw new Error("No property data received");
-        }
+        await loadPropertyDetails(id);
       } catch (err) {
-        console.error("Property fetch error:", err);
-        if (!cancelled) {
-          const status = err.response?.status;
-          const message = err.response?.data?.message || err.message;
-          if (status === 500) {
-            setError("Server error. Please try again later.");
-          } else if (status === 404) {
-            setError("Property not found.");
-          } else {
-            setError(message || "Failed to load property details.");
-          }
-          if (import.meta.env.DEV) {
-            console.warn("Using mock property data (development only)");
-            setProperty(MOCK);
-            setError(null);
-          }
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
+        if (cancelled) return;
       }
     };
     fetchProperty();
@@ -438,7 +731,7 @@ export default function PropertyDetailPage() {
   }, [id]);
 
   useEffect(() => {
-    if (!id) return;
+    if (!id || id === "undefined") return;
 
     let cancelled = false;
     const loadReviews = async () => {
@@ -498,6 +791,60 @@ export default function PropertyDetailPage() {
     };
     checkFavoriteStatus();
   }, [user, property?._id]);
+
+  useEffect(() => {
+    if (!user?._id || user.role !== "buyer" || !property?._id) {
+      setHasExistingVisit(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadVisitStatus = async () => {
+      try {
+        setCheckingVisitStatus(true);
+        const response = await visitService.getBuyerVisits({ limit: 100 });
+        const visits = Array.isArray(response)
+          ? response
+          : Array.isArray(response?.visits)
+          ? response.visits
+          : Array.isArray(response?.data)
+          ? response.data
+          : [];
+
+        const alreadyScheduled = visits.some((visit) => {
+          const visitPropertyId =
+            visit?.property?._id ||
+            visit?.propertyId ||
+            visit?.property_id ||
+            visit?.property;
+          const visitStatus = String(visit?.status || visit?.visit_status || "").toUpperCase();
+
+          return (
+            String(visitPropertyId) === String(property._id) &&
+            (visitStatus === "PENDING" || visitStatus === "CONFIRMED" || visitStatus === "REQUESTED")
+          );
+        });
+
+        if (!cancelled) {
+          setHasExistingVisit(alreadyScheduled);
+        }
+      } catch {
+        if (!cancelled) {
+          setHasExistingVisit(false);
+        }
+      } finally {
+        if (!cancelled) {
+          setCheckingVisitStatus(false);
+        }
+      }
+    };
+
+    loadVisitStatus();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?._id, user?.role, property?._id]);
 
   // HANDLE SAVE / UNSAVE
   const handleSave = async () => {
@@ -698,13 +1045,21 @@ export default function PropertyDetailPage() {
 
   if (!property) return null;
 
+  const normalizedListingType = String(property.listingType || property.purpose || "sale").toLowerCase();
+  const normalizedPropertyStatus = String(property.status || "").toUpperCase();
+  const isPropertyBooked = normalizedPropertyStatus === "BOOKED";
+  const isPropertyUnavailable = ["BOOKED", "SOLD", "RENTED"].includes(normalizedPropertyStatus);
+  const canUseFullPayment = Boolean(property?.canUseFullPayment);
   const badgeLabel =
+    property.listingLabel ||
     { sale: "For Sale", rent: "For Rent", pg: "PG", lease: "Lease" }[
-      property.listingType
+      normalizedListingType
     ] || "For Sale";
   const badgeColor =
-    { sale: "#7c3aed", rent: "#0891b2", pg: "#059669", lease: "#d97706" }[
-      property.listingType
+    isPropertyBooked
+      ? "#0f766e"
+      : { sale: "#7c3aed", rent: "#0891b2", pg: "#059669", lease: "#d97706" }[
+      normalizedListingType
     ] || "#7c3aed";
 
   const detailRows = [
@@ -765,13 +1120,18 @@ export default function PropertyDetailPage() {
                 >
                   {badgeLabel}
                 </span>
+                {isPropertyBooked && (
+                  <span className="text-xs font-bold px-3 py-1 rounded-full bg-[#dcfce7] text-[#166534] border border-[#bbf7d0]">
+                    Booked
+                  </span>
+                )}
                 {property.isVerified && (
                   <span className="text-xs font-bold px-3 py-1 rounded-full bg-green-100 text-green-700 border border-green-200">
                     ✓ Verified
                   </span>
                 )}
                 <span className="text-xs text-[rgba(26,10,46,0.5)] ml-auto">
-                  Listed {timeAgo(property.createdAt)}
+                  Listed {property.listedSince || timeAgo(property.createdAt)}
                 </span>
               </div>
               <h1 className="font-serif text-3xl font-bold text-[#1a0a2e] mb-2">
@@ -845,6 +1205,8 @@ export default function PropertyDetailPage() {
                   ))}
                 </div>
               </Section>
+
+              <FloorPlansSection property={property} />
             </div>
           </div>
 
@@ -853,7 +1215,7 @@ export default function PropertyDetailPage() {
             <div className="bg-white rounded-2xl border border-[rgba(124,58,237,0.15)] shadow-sm p-6 sticky top-24">
               <div className="font-serif text-3xl font-bold text-[#1a0a2e]">
                 {formatPrice(property.price)}
-                {property.listingType === "rent" && (
+                {normalizedListingType === "rent" && (
                   <span className="text-base font-normal text-[rgba(26,10,46,0.5)]">
                     /month
                   </span>
@@ -887,13 +1249,93 @@ export default function PropertyDetailPage() {
                 <InquiryForm propertyId={property._id} />
               </div>
 
+              {isPropertyBooked && (
+                <div className="mt-4 rounded-2xl border border-[#bbf7d0] bg-[#f0fdf4] px-4 py-3 text-sm font-semibold text-[#166534]">
+                  This property is booked. The payment invoice and confirmation email have been sent after the successful payment.
+                </div>
+              )}
+
               {/* Schedule a Visit Button */}
               <button
-                onClick={() => setShowScheduleModal(true)}
-                className="w-full py-3 mt-3 bg-white border border-purple-300 text-purple-700 font-bold rounded-xl hover:bg-purple-50 transition"
+                onClick={() => {
+                  if (!user) {
+                    toast.info("Please login to schedule a visit.");
+                    navigate("/login");
+                    return;
+                  }
+                  if (user.role !== "buyer") {
+                    toast.error("Only buyer accounts can schedule a visit.");
+                    navigate("/login");
+                    return;
+                  }
+                  if (hasExistingVisit) {
+                    toast.info("You already have a visit request for this property.");
+                    navigate("/dashboard/buyer");
+                    return;
+                  }
+                  setShowScheduleModal(true);
+                }}
+                disabled={checkingVisitStatus}
+                className="w-full py-3 mt-3 bg-white border border-purple-300 text-purple-700 font-bold rounded-xl hover:bg-purple-50 transition disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                📅 Schedule a Visit
+                {checkingVisitStatus
+                  ? "Checking visit status..."
+                  : hasExistingVisit
+                  ? "View Scheduled Visit"
+                  : "Schedule a Visit"}
               </button>
+
+              {Boolean(property?.canUseAdvancePayment) && (
+                <button
+                  onClick={() => {
+                    if (isPropertyUnavailable) {
+                      toast.info(`This property is already ${normalizedPropertyStatus.toLowerCase()}.`);
+                      return;
+                    }
+                    if (!user) {
+                      toast.info("Please login to continue with the advance payment/token.");
+                      navigate("/login");
+                      return;
+                    }
+                    if (user.role !== "buyer") {
+                      toast.error("Only buyer accounts can make an advance payment/token.");
+                      navigate("/login");
+                      return;
+                    }
+                    setShowAdvancePaymentModal(true);
+                  }}
+                  disabled={isPropertyUnavailable}
+                  className="w-full py-3 mt-3 bg-linear-to-r from-[#0f766e] to-[#0d9488] text-white font-bold rounded-xl hover:shadow-lg transition disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {isPropertyUnavailable ? `Property ${normalizedPropertyStatus}` : "Advance Payment / Token"}
+                </button>
+              )}
+
+              {canUseFullPayment && (
+                <button
+                  onClick={() => {
+                    if (isPropertyUnavailable) {
+                      toast.info(`This property is already ${normalizedPropertyStatus.toLowerCase()}.`);
+                      return;
+                    }
+                    if (!user) {
+                      toast.info("Please login to continue with the full payment.");
+                      navigate("/login");
+                      return;
+                    }
+                    if (user.role !== "buyer") {
+                      toast.error("Only buyer accounts can make a full payment.");
+                      navigate("/login");
+                      return;
+                    }
+                    setShowFullPaymentModal(true);
+                  }}
+                  disabled={isPropertyUnavailable}
+                  className="w-full py-3 mt-3 bg-linear-to-r from-[#1d4ed8] to-[#2563eb] text-white font-bold rounded-xl hover:shadow-lg transition disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {isPropertyUnavailable ? `Property ${normalizedPropertyStatus}` : getFullPaymentLabel(property)}
+                </button>
+              )}
 
               <div className="flex gap-3 mt-4">
                 <button
@@ -947,6 +1389,461 @@ export default function PropertyDetailPage() {
           }}
         />
       )}
+      {showAdvancePaymentModal && (
+        <AdvancePaymentModal
+          property={property}
+          onClose={() => setShowAdvancePaymentModal(false)}
+          onSuccess={() => {
+            loadPropertyDetails(property?._id || id, { silent: true }).catch(() => {});
+          }}
+        />
+      )}
+      {showFullPaymentModal && (
+        <FullPaymentModal
+          property={property}
+          onClose={() => setShowFullPaymentModal(false)}
+          onSuccess={() => {
+            loadPropertyDetails(property?._id || id, { silent: true }).catch(() => {});
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function AdvancePaymentModal({ property, onClose, onSuccess }) {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [amount, setAmount] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("upi");
+  const [notes, setNotes] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const suggestedAmount = (() => {
+    const basePrice = Number(property?.price || 0);
+    if (!Number.isFinite(basePrice) || basePrice <= 0) return 50000;
+    return Math.max(25000, Math.round(basePrice * 0.01));
+  })();
+
+  useEffect(() => {
+    setAmount(String(suggestedAmount));
+  }, [suggestedAmount]);
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+
+    if (!user) {
+      toast.info("Please login to continue with the advance payment/token.");
+      navigate("/login");
+      return;
+    }
+
+    if (user.role !== "buyer") {
+      toast.error("Only buyer accounts can make an advance payment/token.");
+      navigate("/login");
+      return;
+    }
+
+    const numericAmount = Number(amount);
+    if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
+      toast.error("Please enter a valid payment amount.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await loadRazorpayCheckout();
+
+      const orderResponse = await paymentService.createAdvanceTokenOrder({
+        propertyId: property?._id,
+        amount: numericAmount,
+        paymentMethod,
+        notes: notes.trim(),
+      });
+
+      const orderPayload = orderResponse?.data || {};
+      const order = orderPayload?.order;
+      const razorpayKeyId = orderPayload?.razorpayKeyId;
+
+      if (!order?.id || !razorpayKeyId) {
+        throw new Error("Unable to initialize Razorpay checkout.");
+      }
+
+      const buyerName = String(orderPayload?.buyer?.name || user?.name || "").trim();
+      const buyerEmail = String(orderPayload?.buyer?.email || user?.email || "").trim();
+      const buyerContact = normalizeRazorpayContact(orderPayload?.buyer?.phone || user?.phone || "");
+      const prefill = {};
+
+      if (buyerName) prefill.name = buyerName;
+      if (isValidEmail(buyerEmail)) prefill.email = buyerEmail;
+      if (buyerContact) prefill.contact = buyerContact;
+
+      await new Promise((resolve, reject) => {
+        const razorpay = new window.Razorpay({
+          key: razorpayKeyId,
+          amount: order.amount,
+          currency: order.currency || "INR",
+          name: "PlotPerfect",
+          description: `Advance payment for ${property?.title || "property"}`,
+          order_id: order.id,
+          prefill,
+          theme: {
+            color: "#0f766e",
+          },
+          modal: {
+            ondismiss: () => reject(new Error("Payment was cancelled.")),
+          },
+          handler: async (response) => {
+            try {
+              const verificationResponse = await paymentService.verifyAdvanceToken({
+                propertyId: property?._id,
+                amount: numericAmount,
+                notes: notes.trim(),
+                razorpayOrderId: response.razorpay_order_id,
+                razorpayPaymentId: response.razorpay_payment_id,
+                razorpaySignature: response.razorpay_signature,
+              });
+
+              const completedPaymentId = verificationResponse?.data?._id;
+              if (completedPaymentId) {
+                await triggerInvoiceDownload(completedPaymentId);
+              }
+
+              toast.success("Payment completed successfully. Confirmation email sent.");
+              onSuccess?.();
+              onClose?.();
+              resolve();
+            } catch (verificationError) {
+              reject(
+                new Error(
+                  verificationError?.response?.data?.message ||
+                    "Payment verification failed."
+                )
+              );
+            }
+          },
+        });
+
+        razorpay.on("payment.failed", (response) => {
+          const reason =
+            response?.error?.description ||
+            response?.error?.reason ||
+            response?.error?.code ||
+            "Razorpay payment failed.";
+          reject(new Error(reason));
+        });
+
+        razorpay.open();
+      });
+    } catch (error) {
+      console.error("Advance payment flow failed:", error?.response?.data || error);
+      toast.error(getPaymentErrorMessage(error, "Failed to complete advance payment/token."));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl">
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div>
+            <h2 className="text-xl font-bold text-gray-800">Advance Payment / Token</h2>
+            <p className="text-sm text-gray-500 mt-1">
+              Secure this property with a real payment record linked to the owner.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-9 h-9 rounded-full bg-[#f4f1ff] text-[#7c3aed] font-bold"
+          >
+            X
+          </button>
+        </div>
+
+        <div className="rounded-2xl border border-[rgba(124,58,237,0.12)] bg-[#faf8ff] p-4 mb-5">
+          <div className="text-sm font-semibold text-[#1a0a2e]">{property?.title || "Property"}</div>
+          <div className="text-xs text-[rgba(26,10,46,0.55)] mt-1">
+            Suggested token: {formatPrice(suggestedAmount)}
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-semibold text-[rgba(26,10,46,0.75)] mb-1">
+              Amount
+            </label>
+            <input
+              type="number"
+              min="1"
+              step="1"
+              required
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              className="w-full p-3 rounded-xl border border-[rgba(124,58,237,0.2)] bg-[#f9f9ff] text-[#1a0a2e] outline-none focus:border-[#7c3aed]"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-[rgba(26,10,46,0.75)] mb-1">
+              Payment Method
+            </label>
+            <select
+              value={paymentMethod}
+              onChange={(e) => setPaymentMethod(e.target.value)}
+              className="w-full p-3 rounded-xl border border-[rgba(124,58,237,0.2)] bg-[#f9f9ff] text-[#1a0a2e] outline-none focus:border-[#7c3aed]"
+            >
+              <option value="upi">UPI</option>
+              <option value="card">Card</option>
+              <option value="netbanking">Net Banking</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-[rgba(26,10,46,0.75)] mb-1">
+              Notes
+            </label>
+            <textarea
+              rows={3}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Optional note for the owner about your token/booking intent..."
+              className="w-full p-3 rounded-xl border border-[rgba(124,58,237,0.2)] bg-[#f9f9ff] text-[#1a0a2e] outline-none focus:border-[#7c3aed] resize-y"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full py-3 bg-linear-to-r from-[#0f766e] to-[#0d9488] text-white font-bold rounded-xl hover:shadow-lg transition disabled:opacity-70"
+          >
+            {loading ? "Opening Razorpay..." : "Pay With Razorpay"}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function FullPaymentModal({ property, onClose, onSuccess }) {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [paymentMethod, setPaymentMethod] = useState("upi");
+  const [notes, setNotes] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const payableAmount = Number(property?.price || 0);
+  const listingType = String(property?.listingType || property?.purpose || "").toLowerCase();
+  const amountLabel = ["rent", "pg"].includes(listingType) ? "Full Amount" : "Full Price";
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+
+    if (!user) {
+      toast.info("Please login to continue with the full payment.");
+      navigate("/login");
+      return;
+    }
+
+    if (user.role !== "buyer") {
+      toast.error("Only buyer accounts can make a full payment.");
+      navigate("/login");
+      return;
+    }
+
+    if (!Number.isFinite(payableAmount) || payableAmount <= 0) {
+      toast.error("This property does not have a valid payable amount.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await loadRazorpayCheckout();
+
+      const orderResponse = await paymentService.createFullPaymentOrder({
+        propertyId: property?._id,
+        paymentMethod,
+        notes: notes.trim(),
+      });
+
+      const orderPayload = orderResponse?.data || {};
+      const order = orderPayload?.order;
+      const razorpayKeyId = orderPayload?.razorpayKeyId;
+
+      if (!order?.id || !razorpayKeyId) {
+        throw new Error("Unable to initialize Razorpay checkout.");
+      }
+
+      const buyerName = String(orderPayload?.buyer?.name || user?.name || "").trim();
+      const buyerEmail = String(orderPayload?.buyer?.email || user?.email || "").trim();
+      const buyerContact = normalizeRazorpayContact(orderPayload?.buyer?.phone || user?.phone || "");
+      const prefill = {};
+
+      if (buyerName) prefill.name = buyerName;
+      if (isValidEmail(buyerEmail)) prefill.email = buyerEmail;
+      if (buyerContact) prefill.contact = buyerContact;
+
+      console.info("[FullPaymentModal] Initializing Razorpay Checkout:", {
+        key: razorpayKeyId ? `${razorpayKeyId.substring(0, 8)}...` : "MISSING",
+        orderId: order?.id,
+        amount: order?.amount,
+        prefill
+      });
+
+      await new Promise((resolve, reject) => {
+        const options = {
+          key: razorpayKeyId,
+          amount: order.amount,
+          currency: order.currency || "INR",
+          name: "PlotPerfect",
+          description: `Full payment for ${property?.title || "property"}`,
+          image: LOGO_URL,
+          order_id: order.id,
+          prefill,
+          theme: {
+            color: "#2563eb",
+          },
+          modal: {
+            ondismiss: () => {
+              console.warn("Razorpay modal dismissed by user or closed automatically.");
+              reject(new Error("Payment was cancelled."));
+            },
+          },
+          handler: async (response) => {
+            try {
+              const verificationResponse = await paymentService.verifyFullPayment({
+                propertyId: property?._id,
+                notes: notes.trim(),
+                razorpayOrderId: response.razorpay_order_id,
+                razorpayPaymentId: response.razorpay_payment_id,
+                razorpaySignature: response.razorpay_signature,
+              });
+
+              const completedPaymentId = verificationResponse?.data?._id;
+              if (completedPaymentId) {
+                await triggerInvoiceDownload(completedPaymentId);
+              }
+
+              toast.success("Full payment completed successfully. Invoice downloaded.");
+              onSuccess?.();
+              onClose?.();
+              resolve();
+            } catch (verificationError) {
+              reject(
+                new Error(
+                  verificationError?.response?.data?.message ||
+                    "Payment verification failed."
+                )
+              );
+            }
+          },
+        };
+
+        try {
+          const razorpay = new window.Razorpay(options);
+          
+          razorpay.on("payment.failed", (response) => {
+            // Log the failure to console for debugging
+            console.warn("Razorpay payment attempt failed:", response?.error);
+            
+            // We DON'T reject here because the user can usually try again 
+            // with a different card/method without closing the modal.
+            // Razorpay's modal shows its own error message to the user.
+          });
+
+          razorpay.open();
+        } catch (initError) {
+          console.error("Failed to initialize Razorpay object:", initError);
+          reject(new Error("Could not initialize payment gateway."));
+        }
+      });
+    } catch (error) {
+      if (error?.message !== "Payment was cancelled.") {
+        console.error("Full payment flow failed:", error?.response?.data || error);
+        toast.error(getPaymentErrorMessage(error, "Failed to complete full payment."));
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl">
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div>
+            <h2 className="text-xl font-bold text-gray-800">{amountLabel}</h2>
+            <p className="text-sm text-gray-500 mt-1">
+              This checkout uses the live property price from the backend and downloads the invoice right after success.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-9 h-9 rounded-full bg-[#eef4ff] text-[#2563eb] font-bold"
+          >
+            X
+          </button>
+        </div>
+
+        <div className="rounded-2xl border border-[#bfdbfe] bg-[#eff6ff] p-4 mb-5">
+          <div className="text-sm font-semibold text-[#1a0a2e]">{property?.title || "Property"}</div>
+          <div className="text-xs text-[rgba(26,10,46,0.55)] mt-1">
+            Payable amount: {formatPrice(payableAmount)}
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-semibold text-[rgba(26,10,46,0.75)] mb-1">
+              {amountLabel}
+            </label>
+            <input
+              type="text"
+              value={formatPrice(payableAmount)}
+              readOnly
+              className="w-full p-3 rounded-xl border border-[#bfdbfe] bg-[#eff6ff] text-[#1a0a2e] outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-[rgba(26,10,46,0.75)] mb-1">
+              Payment Method
+            </label>
+            <select
+              value={paymentMethod}
+              onChange={(e) => setPaymentMethod(e.target.value)}
+              className="w-full p-3 rounded-xl border border-[#bfdbfe] bg-[#f8fbff] text-[#1a0a2e] outline-none focus:border-[#2563eb]"
+            >
+              <option value="upi">UPI</option>
+              <option value="card">Card</option>
+              <option value="netbanking">Net Banking</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-[rgba(26,10,46,0.75)] mb-1">
+              Notes
+            </label>
+            <textarea
+              rows={3}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Optional note for the owner about this payment..."
+              className="w-full p-3 rounded-xl border border-[#bfdbfe] bg-[#f8fbff] text-[#1a0a2e] outline-none focus:border-[#2563eb] resize-y"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full py-3 bg-linear-to-r from-[#1d4ed8] to-[#2563eb] text-white font-bold rounded-xl hover:shadow-lg transition disabled:opacity-70"
+          >
+            {loading ? "Opening Razorpay..." : `${amountLabel} With Razorpay`}
+          </button>
+        </form>
+      </div>
     </div>
   );
 }

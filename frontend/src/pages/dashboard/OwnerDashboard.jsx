@@ -1,13 +1,103 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { propertyService, inquiryService } from '../../services'
+import { propertyService, inquiryService, saleRequestService, paymentService } from '../../services'
 import { useAuth } from '../../context/AuthContext'
 import { formatPrice, timeAgo, getInitials } from '../../utils/index'
 import { toast } from 'react-toastify'
 import NotificationBell from '../../Components/ui/NotificationBell'
 import ThreadPanel from '../../Components/messaging/ThreadPanel'
 
-const TABS = ['Overview', 'My Properties', 'Inquiries', 'Analytics']
+const TABS = ['Overview', 'My Properties', 'Inquiries', 'Agent Sales', 'Payments', 'Analytics']
+const PROPERTY_CATEGORY_OPTIONS = [
+  { value: 'sale', label: 'For Sale', propertyType: 'Apartment', purpose: 'sale', type: 'apartment' },
+  { value: 'rent', label: 'For Rent', propertyType: 'Apartment', purpose: 'rent', type: 'apartment' },
+  { value: 'pg', label: 'For PG', propertyType: 'PG', purpose: 'pg', type: 'pg' },
+  { value: 'commercial', label: 'Commercial', propertyType: 'Commercial', purpose: 'sale', type: 'commercial' },
+  { value: 'plot', label: 'Plot', propertyType: 'Plot', purpose: 'sale', type: 'plot' },
+]
+
+const getPropertyCategoryValue = (prop) => {
+  const purpose = String(prop?.listingType || prop?.purpose || '').trim().toLowerCase()
+  const type = String(prop?.propertyType || prop?.type || '').trim().toLowerCase()
+
+  if (purpose === 'pg' || type === 'pg') return 'pg'
+  if (type === 'commercial') return 'commercial'
+  if (type === 'plot') return 'plot'
+  if (purpose === 'rent') return 'rent'
+  return 'sale'
+}
+
+const listFrom = (payload) => {
+  if (Array.isArray(payload)) return payload
+  if (Array.isArray(payload?.data)) return payload.data
+  return []
+}
+
+function SaleRequestOwnerCard({ request, onOpenConversation, onMarkPaymentReceived }) {
+  const property = request?.property || {}
+  const agent = request?.acceptedBy || null
+  const payment = request?.payment || null
+  const status = String(request?.status || '').toLowerCase()
+
+  return (
+    <div style={{ padding: 18, background: '#ffffff', border: '1px solid rgba(124,58,237,0.1)', borderRadius: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 10 }}>
+        <div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: '#1a0a2e' }}>{property?.title || 'Property'}</div>
+          <div style={{ fontSize: 12.5, color: 'rgba(26,10,46,0.5)', marginTop: 4 }}>
+            {property?.location?.city || property?.city || 'City not set'} · Requested {timeAgo(request?.createdAt)}
+          </div>
+        </div>
+        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#7c3aed', background: 'rgba(124,58,237,0.08)', borderRadius: 999, padding: '6px 10px', height: 'fit-content' }}>
+          {status || 'open'}
+        </div>
+      </div>
+
+      <div style={{ fontSize: 13, color: 'rgba(26,10,46,0.72)', lineHeight: 1.6, marginBottom: 12 }}>
+        {request?.ownerMessage || 'Waiting for an agent to accept this sale request.'}
+      </div>
+
+      {agent ? (
+        <div style={{ padding: 14, borderRadius: 12, background: '#f9f9ff', border: '1px solid rgba(124,58,237,0.1)' }}>
+          <div style={{ fontSize: 11, color: 'rgba(26,10,46,0.45)', fontWeight: 700, marginBottom: 6 }}>ACCEPTED AGENT</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: '#1a0a2e' }}>{agent.name}</div>
+          <div style={{ fontSize: 12.5, color: 'rgba(26,10,46,0.58)', marginTop: 4 }}>
+            {agent.email}{agent.phone ? ` · ${agent.phone}` : ''}
+          </div>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 12 }}>
+            <button onClick={() => onOpenConversation?.(request)} style={{ padding: '8px 14px', borderRadius: 10, border: '1px solid rgba(124,58,237,0.24)', background: '#fff', color: '#7c3aed', fontWeight: 700, cursor: 'pointer' }}>
+              Open Chat
+            </button>
+            {agent.phone && (
+              <a href={`tel:${agent.phone}`} style={{ padding: '8px 14px', borderRadius: 10, border: '1px solid rgba(8,145,178,0.24)', background: '#fff', color: '#0891b2', fontWeight: 700, textDecoration: 'none' }}>
+                Call Agent
+              </a>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div style={{ padding: 14, borderRadius: 12, background: '#fff8ed', border: '1px solid rgba(245,158,11,0.18)', fontSize: 13, color: '#9a6700' }}>
+          No agent has accepted this request yet.
+        </div>
+      )}
+
+      {payment && (
+        <div style={{ marginTop: 14, padding: 14, borderRadius: 12, background: '#effcf5', border: '1px solid rgba(34,197,94,0.16)' }}>
+          <div style={{ fontSize: 11, color: '#15803d', fontWeight: 700, marginBottom: 6 }}>PAYMENT</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: '#1a0a2e' }}>{formatPrice(payment.amount)}</div>
+          <div style={{ fontSize: 12.5, color: 'rgba(26,10,46,0.58)', marginTop: 4 }}>
+            Status: {payment.status} · Method: {payment.paymentMethod} · Type: {payment.paymentType === 'advance_token' ? 'Advance Payment / Token' : 'Sale Closure'}
+          </div>
+          {payment.status === 'pending' && (
+            <button onClick={() => onMarkPaymentReceived?.(request)} style={{ marginTop: 10, padding: '8px 14px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg,#16a34a,#15803d)', color: '#fff', fontWeight: 700, cursor: 'pointer' }}>
+              Mark Payment Received
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
 
 /* ── Stat Card (light theme) ── */
 function StatCard({ icon, label, value, change, up = true }) {
@@ -60,10 +150,12 @@ function StatCard({ icon, label, value, change, up = true }) {
 }
 
 /* ── Property Row (light theme) – with editable status dropdown ── */
-function PropertyRow({ prop, onDelete, onStatusChange }) {
+function PropertyRow({ prop, onDelete, onStatusChange, onCategoryChange }) {
   const navigate = useNavigate()
   const [updatingStatus, setUpdatingStatus] = useState(false)
+  const [updatingCategory, setUpdatingCategory] = useState(false)
   const [currentStatus, setCurrentStatus] = useState(prop.status || 'PENDING')
+  const [currentCategory, setCurrentCategory] = useState(getPropertyCategoryValue(prop))
 
   // Convert price to rupees (assuming prop.price is in lakhs)
   const priceInRupees = Number(prop.price) * 100000
@@ -82,10 +174,15 @@ function PropertyRow({ prop, onDelete, onStatusChange }) {
   const statusMap = {
     'PENDING': { label: 'Pending', color: '#f59e0b', bg: 'rgba(245,158,11,0.1)' },
     'APPROVED': { label: 'Active', color: '#16a34a', bg: 'rgba(34,197,94,0.1)' },
+    'BOOKED': { label: 'Booked', color: '#0f766e', bg: 'rgba(15,118,110,0.1)' },
     'SOLD': { label: 'Sold', color: '#7c3aed', bg: 'rgba(124,58,237,0.1)' },
     'RENTED': { label: 'Rented', color: '#0891b2', bg: 'rgba(8,145,178,0.1)' },
   }
   const statusStyle = statusMap[currentStatus] || statusMap['PENDING']
+
+  useEffect(() => {
+    setCurrentCategory(getPropertyCategoryValue(prop))
+  }, [prop])
 
   const handleStatusChange = async (e) => {
     const newStatus = e.target.value
@@ -99,6 +196,30 @@ function PropertyRow({ prop, onDelete, onStatusChange }) {
       toast.error('Failed to update status')
     } finally {
       setUpdatingStatus(false)
+    }
+  }
+
+  const handleCategoryChange = async (e) => {
+    const nextCategory = e.target.value
+    const option = PROPERTY_CATEGORY_OPTIONS.find((item) => item.value === nextCategory)
+    if (!option) return
+
+    setUpdatingCategory(true)
+    try {
+      const payload = {
+        listingType: option.purpose,
+        propertyType: option.propertyType,
+        purpose: option.purpose,
+        type: option.type,
+      }
+      await propertyService.update(prop._id, payload)
+      setCurrentCategory(nextCategory)
+      onCategoryChange?.(prop._id, payload)
+      toast.success(`Property category changed to ${option.label}`)
+    } catch {
+      toast.error('Failed to update property category')
+    } finally {
+      setUpdatingCategory(false)
     }
   }
 
@@ -146,6 +267,18 @@ function PropertyRow({ prop, onDelete, onStatusChange }) {
         <div style={{ fontSize: 12, color: 'rgba(26,10,46,0.5)' }}>
           👁 {prop.views || 0} views
         </div>
+        <div style={{ marginTop: 8 }}>
+          <select
+            value={currentCategory}
+            onChange={handleCategoryChange}
+            disabled={updatingCategory}
+            style={{ height: 32, minWidth: 132, padding: '0 10px', borderRadius: 999, border: '1px solid rgba(124,58,237,0.22)', background: updatingCategory ? '#f3f0ff' : '#fff', color: '#7c3aed', fontSize: 12, fontWeight: 700, cursor: updatingCategory ? 'not-allowed' : 'pointer', outline: 'none', fontFamily: "'DM Sans',sans-serif" }}
+          >
+            {PROPERTY_CATEGORY_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* Price */}
@@ -174,6 +307,7 @@ function PropertyRow({ prop, onDelete, onStatusChange }) {
         >
           <option value="PENDING">Pending</option>
           <option value="APPROVED">Active</option>
+          <option value="BOOKED">Booked</option>
           <option value="SOLD">Sold</option>
           <option value="RENTED">Rented</option>
         </select>
@@ -358,6 +492,8 @@ export default function OwnerDashboard() {
   const [leads, setLeads] = useState([])
   const [leadSearch, setLeadSearch] = useState('')
   const [activeInquiry, setActiveInquiry] = useState(null)
+  const [saleRequests, setSaleRequests] = useState([])
+  const [payments, setPayments] = useState([])
   const [stats, setStats] = useState({})
   const [loading, setLoading] = useState(true)
   const inquiryNotificationRef = useRef({})
@@ -366,9 +502,15 @@ export default function OwnerDashboard() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const propsRes = await propertyService.getByOwner(user._id)
+        const [propsRes, ownerSaleRes, paymentsRes] = await Promise.all([
+          propertyService.getByOwner(user._id),
+          saleRequestService.getOwnerRequests(),
+          paymentService.getForUser(user._id),
+        ])
         const listingsData = propsRes.data || propsRes || []
         setListings(listingsData)
+        setSaleRequests(listFrom(ownerSaleRes))
+        setPayments(listFrom(paymentsRes))
 
         const inquiriesRes = await inquiryService.getAll()
         const allInquiries = inquiriesRes.data || inquiriesRes || []
@@ -379,7 +521,7 @@ export default function OwnerDashboard() {
         setLeads(filteredLeads)
 
         setStats({
-          activeListings: listingsData.filter(p => p.status !== 'SOLD' && p.status !== 'RENTED').length,
+          activeListings: listingsData.filter(p => !['BOOKED', 'SOLD', 'RENTED'].includes(p.status)).length,
           totalViews: listingsData.reduce((acc, p) => acc + (p.views || 0), 0),
           totalInquiries: filteredLeads.length,
           mon: 12, tue: 19, wed: 8, thu: 25, fri: 30, sat: 22, sun: 15,
@@ -442,6 +584,35 @@ export default function OwnerDashboard() {
     }
   }, [user?._id, listings])
 
+  useEffect(() => {
+    if (!user?._id) return
+
+    let cancelled = false
+
+    const pollOwnerSales = async () => {
+      try {
+        const [salePayload, paymentPayload] = await Promise.all([
+          saleRequestService.getOwnerRequests(),
+          paymentService.getForUser(user._id),
+        ])
+
+        if (!cancelled) {
+          setSaleRequests(listFrom(salePayload))
+          setPayments(listFrom(paymentPayload))
+        }
+      } catch {
+        // silent refresh
+      }
+    }
+
+    pollOwnerSales()
+    const timer = window.setInterval(pollOwnerSales, 10000)
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
+  }, [user?._id])
+
   const handleDeleteListing = async (id) => {
     if (!window.confirm('Delete this listing?')) return
     try {
@@ -463,8 +634,49 @@ export default function OwnerDashboard() {
     ))
     setStats(prev => ({
       ...prev,
-      activeListings: prev.activeListings + (newStatus === 'APPROVED' ? 1 : newStatus === 'SOLD' || newStatus === 'RENTED' ? -1 : 0)
+      activeListings: prev.activeListings + (newStatus === 'APPROVED' ? 1 : ['BOOKED', 'SOLD', 'RENTED'].includes(newStatus) ? -1 : 0)
     }))
+  }
+
+  const handleCategoryChange = (id, payload) => {
+    setListings(prev => prev.map(item =>
+      item._id === id
+        ? {
+            ...item,
+            listingType: payload.listingType,
+            propertyType: payload.propertyType,
+            purpose: payload.purpose,
+            type: payload.type,
+          }
+        : item
+    ))
+  }
+
+  const handleOpenSaleConversation = (request) => {
+    if (!request?.thread?._id && !request?.threadId) {
+      toast.info('Chat will be available once an agent accepts this request.')
+      return
+    }
+    setActiveInquiry({
+      threadId: request?.thread?._id || request?.threadId,
+      thread: request?.thread,
+      property: request?.property,
+    })
+  }
+
+  const handleMarkPaymentReceived = async (request) => {
+    try {
+      await saleRequestService.updatePayment(request._id, { status: 'completed' })
+      toast.success('Payment marked as received')
+      const [salePayload, paymentPayload] = await Promise.all([
+        saleRequestService.getOwnerRequests(),
+        paymentService.getForUser(user._id),
+      ])
+      setSaleRequests(listFrom(salePayload))
+      setPayments(listFrom(paymentPayload))
+    } catch (error) {
+      toast.error(error?.response?.data?.message || 'Failed to update payment status')
+    }
   }
 
   const filteredLeads = leads
@@ -520,6 +732,7 @@ export default function OwnerDashboard() {
               prop={p} 
               onDelete={handleDeleteListing} 
               onStatusChange={handleStatusChange}
+              onCategoryChange={handleCategoryChange}
             />
           ))}
         </div>
@@ -539,6 +752,52 @@ export default function OwnerDashboard() {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {filteredLeads.map(lead => <InquiryCard key={lead._id} inquiry={lead} onRespond={handleLeadRespond} onOpenConversation={setActiveInquiry} />)}
+        </div>
+      )}
+    </div>,
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, gap: 12, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 18, fontWeight: 700, color: '#1a0a2e' }}>{saleRequests.length} Agent Sale Requests</span>
+        <button onClick={() => navigate('/protected/agent')} style={{ padding: '9px 18px', background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', border: 'none', borderRadius: 9, color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>+ Post Property</button>
+      </div>
+      {saleRequests.length === 0 ? (
+        <EmptyState icon="🤝" title="No agent sale requests yet" sub="Check Sell via agent while posting a property to invite agents." btn="Post Property" to="/protected/agent" />
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {saleRequests.map((request) => (
+            <SaleRequestOwnerCard
+              key={request._id}
+              request={request}
+              onOpenConversation={handleOpenSaleConversation}
+              onMarkPaymentReceived={handleMarkPaymentReceived}
+            />
+          ))}
+        </div>
+      )}
+    </div>,
+    <div>
+      <div style={{ fontSize: 18, fontWeight: 700, color: '#1a0a2e', marginBottom: 20 }}>{payments.length} Payments</div>
+      {payments.length === 0 ? (
+        <EmptyState icon="💳" title="No payments yet" sub="Payments created by your assigned agent after a property is sold will appear here." btn="View Agent Sales" to="/dashboard/owner" />
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {payments.map((payment) => (
+            <div key={payment._id} style={{ padding: 18, background: '#ffffff', border: '1px solid rgba(124,58,237,0.1)', borderRadius: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                <div>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: '#1a0a2e' }}>{payment?.property?.title || 'Property Payment'}</div>
+                  <div style={{ fontSize: 12.5, color: 'rgba(26,10,46,0.56)', marginTop: 4 }}>
+                    Initiated by {payment?.initiatedBy?.name || 'Agent'} · {timeAgo(payment?.createdAt)}
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 22, fontWeight: 800, color: '#1a0a2e' }}>{formatPrice(payment.amount)}</div>
+                  <div style={{ fontSize: 12.5, color: payment.status === 'completed' ? '#16a34a' : '#7c3aed', fontWeight: 700, textTransform: 'uppercase' }}>{payment.status}</div>
+                  <div style={{ fontSize: 12, color: 'rgba(26,10,46,0.45)', marginTop: 4 }}>{payment.paymentType === 'advance_token' ? 'Advance Payment / Token' : 'Sale Closure'}</div>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>,

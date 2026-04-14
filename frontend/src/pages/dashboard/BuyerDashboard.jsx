@@ -36,12 +36,12 @@ const getParticipantUserId = (participant) =>
 /* ── Stat Card ── */
 function StatCard({ icon, label, value }) {
   return (
-    <div 
-      style={{ 
-        background: '#ffffff', 
-        border: '1px solid rgba(124,58,237,0.12)', 
-        borderRadius: 16, 
-        padding: '20px 24px', 
+    <div
+      style={{
+        background: '#ffffff',
+        border: '1px solid rgba(124,58,237,0.12)',
+        borderRadius: 16,
+        padding: '20px 24px',
         boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
         transition: 'all 0.25s cubic-bezier(0.2, 0, 0, 1)',
         cursor: 'pointer',
@@ -57,10 +57,10 @@ function StatCard({ icon, label, value }) {
         e.currentTarget.style.borderColor = 'rgba(124,58,237,0.12)';
       }}
     >
-      <div style={{ 
-        width: 48, height: 48, borderRadius: 14, background: '#f0eeff', 
-        border: '1px solid rgba(124,58,237,0.15)', display: 'flex', 
-        alignItems: 'center', justifyContent: 'center', fontSize: 20, color: '#7c3aed' 
+      <div style={{
+        width: 48, height: 48, borderRadius: 14, background: '#f0eeff',
+        border: '1px solid rgba(124,58,237,0.15)', display: 'flex',
+        alignItems: 'center', justifyContent: 'center', fontSize: 20, color: '#7c3aed'
       }}>
         {icon}
       </div>
@@ -105,11 +105,11 @@ function PropRow({ prop, onUnsave, favoriteId, propertyId }) {
   }
 
   return (
-    <div 
-      style={{ 
-        display: 'grid', gridTemplateColumns: '80px 1fr auto 100px', 
-        gap: 16, padding: '14px 20px', background: '#ffffff', 
-        border: '1px solid rgba(124,58,237,0.08)', borderRadius: 14, 
+    <div
+      style={{
+        display: 'grid', gridTemplateColumns: '80px 1fr auto 100px',
+        gap: 16, padding: '14px 20px', background: '#ffffff',
+        border: '1px solid rgba(124,58,237,0.08)', borderRadius: 14,
         alignItems: 'center', transition: 'all 0.2s'
       }}
       onMouseEnter={e => {
@@ -123,9 +123,9 @@ function PropRow({ prop, onUnsave, favoriteId, propertyId }) {
         e.currentTarget.style.transform = 'translateX(0)';
       }}
     >
-      <div style={{ 
-        width: 72, height: 60, borderRadius: 10, background: 'linear-gradient(135deg,#f0eeff,#e8e4ff)', 
-        overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', 
+      <div style={{
+        width: 72, height: 60, borderRadius: 10, background: 'linear-gradient(135deg,#f0eeff,#e8e4ff)',
+        overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center',
         fontSize: 20, color: '#7c3aed'
       }}>
         {prop.images?.[0] ? (
@@ -143,10 +143,17 @@ function PropRow({ prop, onUnsave, favoriteId, propertyId }) {
       </div>
       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
         <button 
-          onClick={() => navigate(`/property/${prop._id}`)} 
-          style={{ 
-            padding: '6px 14px', borderRadius: 8, border: '1px solid rgba(124,58,237,0.3)', 
-            background: 'none', color: '#7c3aed', fontSize: 12, fontWeight: 600, 
+          onClick={() => {
+            const targetId = prop._id || prop.id;
+            if (targetId && targetId !== "undefined") {
+              navigate(`/property/${targetId}`);
+            } else {
+              toast.warn("Property details unavailable.");
+            }
+          }} 
+          style={{
+            padding: '6px 14px', borderRadius: 8, border: '1px solid rgba(124,58,237,0.3)',
+            background: 'none', color: '#7c3aed', fontSize: 12, fontWeight: 600,
             cursor: 'pointer', transition: 'all 0.2s'
           }}
           onMouseEnter={e => {
@@ -161,15 +168,15 @@ function PropRow({ prop, onUnsave, favoriteId, propertyId }) {
           View
         </button>
         {onUnsave && (
-          <button 
+          <button
             onClick={handleRemoveClick}
             disabled={isRemoving}
-            style={{ 
-              padding: '6px 14px', borderRadius: 8, border: '1px solid rgba(239,68,68,0.3)', 
-              background: isRemoving ? '#fecaca' : 'none', 
-              color: isRemoving ? '#b91c1c' : '#ef4444', 
-              fontSize: 12, fontWeight: 600, 
-              cursor: isRemoving ? 'not-allowed' : 'pointer', 
+            style={{
+              padding: '6px 14px', borderRadius: 8, border: '1px solid rgba(239,68,68,0.3)',
+              background: isRemoving ? '#fecaca' : 'none',
+              color: isRemoving ? '#b91c1c' : '#ef4444',
+              fontSize: 12, fontWeight: 600,
+              cursor: isRemoving ? 'not-allowed' : 'pointer',
               transition: 'all 0.2s'
             }}
             onMouseEnter={e => {
@@ -215,9 +222,9 @@ function VisitCard({ visit, onCancel }) {
   }
 
   return (
-    <div 
-      style={{ 
-        padding: 16, background: '#ffffff', border: '1px solid rgba(124,58,237,0.08)', 
+    <div
+      style={{
+        padding: 16, background: '#ffffff', border: '1px solid rgba(124,58,237,0.08)',
         borderRadius: 14, transition: 'all 0.2s'
       }}
       onMouseEnter={e => {
@@ -233,24 +240,24 @@ function VisitCard({ visit, onCancel }) {
         <div style={{ fontSize: 15, fontWeight: 700, color: '#1a0a2e' }}>
           {visit.property?.title || 'Property Visit'}
         </div>
-        <span style={{ 
-          fontSize: 11, padding: '3px 10px', borderRadius: 20, 
-          background: 
+        <span style={{
+          fontSize: 11, padding: '3px 10px', borderRadius: 20,
+          background:
             visitStatus === 'CONFIRMED' ? 'rgba(34,197,94,0.1)' :
-            visitStatus === 'CANCELLED' ? 'rgba(239,68,68,0.1)' :
-            'rgba(124,58,237,0.08)',
-          color: 
+              visitStatus === 'CANCELLED' ? 'rgba(239,68,68,0.1)' :
+                'rgba(124,58,237,0.08)',
+          color:
             visitStatus === 'CONFIRMED' ? '#16a34a' :
-            visitStatus === 'CANCELLED' ? '#dc2626' :
-            '#7c3aed',
-          fontWeight: 600, textTransform: 'capitalize' 
+              visitStatus === 'CANCELLED' ? '#dc2626' :
+                '#7c3aed',
+          fontWeight: 600, textTransform: 'capitalize'
         }}>
           {visitStatus}
         </span>
       </div>
       {d && (
         <div style={{ fontSize: 13, color: 'rgba(26,10,46,0.6)', marginBottom: 6 }}>
-          📅 {d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })} 
+          📅 {d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
           at {d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
         </div>
       )}
@@ -259,10 +266,17 @@ function VisitCard({ visit, onCancel }) {
       </div>
       <div style={{ display: 'flex', gap: 8 }}>
         <button 
-          onClick={() => navigate(`/property/${visit.property?._id}`)} 
-          style={{ 
-            padding: '6px 14px', borderRadius: 8, border: '1px solid rgba(124,58,237,0.3)', 
-            background: 'none', color: '#7c3aed', fontSize: 12, fontWeight: 600, cursor: 'pointer', 
+          onClick={() => {
+            const targetId = visit.property?._id || visit.property?.id;
+            if (targetId && targetId !== "undefined") {
+              navigate(`/property/${targetId}`);
+            } else {
+              toast.warn("Property details unavailable.");
+            }
+          }} 
+          style={{
+            padding: '6px 14px', borderRadius: 8, border: '1px solid rgba(124,58,237,0.3)',
+            background: 'none', color: '#7c3aed', fontSize: 12, fontWeight: 600, cursor: 'pointer',
             transition: 'all 0.2s'
           }}
           onMouseEnter={e => {
@@ -277,15 +291,15 @@ function VisitCard({ visit, onCancel }) {
           View Property
         </button>
         {visitStatus !== 'CANCELLED' && (
-          <button 
+          <button
             onClick={handleCancel}
             disabled={isCancelling}
-            style={{ 
-              padding: '6px 14px', borderRadius: 8, border: '1px solid rgba(239,68,68,0.3)', 
-              background: isCancelling ? '#fecaca' : 'none', 
-              color: isCancelling ? '#b91c1c' : '#ef4444', 
-              fontSize: 12, fontWeight: 600, 
-              cursor: isCancelling ? 'not-allowed' : 'pointer', 
+            style={{
+              padding: '6px 14px', borderRadius: 8, border: '1px solid rgba(239,68,68,0.3)',
+              background: isCancelling ? '#fecaca' : 'none',
+              color: isCancelling ? '#b91c1c' : '#ef4444',
+              fontSize: 12, fontWeight: 600,
+              cursor: isCancelling ? 'not-allowed' : 'pointer',
               transition: 'all 0.2s'
             }}
             onMouseEnter={e => {
@@ -312,9 +326,9 @@ function VisitCard({ visit, onCancel }) {
 /* ── Inquiry Card ── */
 function InquiryCard({ inquiry, onOpenConversation }) {
   return (
-    <div 
-      style={{ 
-        padding: 16, background: '#ffffff', border: '1px solid rgba(124,58,237,0.08)', 
+    <div
+      style={{
+        padding: 16, background: '#ffffff', border: '1px solid rgba(124,58,237,0.08)',
         borderRadius: 14, transition: 'all 0.2s'
       }}
       onMouseEnter={e => {
@@ -373,7 +387,7 @@ function Overview({ saved, visits, inquiries }) {
             ))}
           </div>
           {validSaved.length > 3 && (
-            <button onClick={() => {}} style={{ marginTop: 12, fontSize: 13, color: '#7c3aed', background: 'none', border: 'none', cursor: 'pointer' }}>
+            <button onClick={() => { }} style={{ marginTop: 12, fontSize: 13, color: '#7c3aed', background: 'none', border: 'none', cursor: 'pointer' }}>
               View all {validSaved.length} →
             </button>
           )}
@@ -596,12 +610,12 @@ export default function BuyerDashboard() {
         <EmptyState icon="❤️" title="No saved properties" sub="Save properties to view them here" btn="Browse Properties" to="/properties" />
       ) : (
         saved.map(fav => (
-          <PropRow 
-            key={fav._id} 
-            prop={fav.property} 
-            favoriteId={fav._id} 
+          <PropRow
+            key={fav._id}
+            prop={fav.property}
+            favoriteId={fav._id}
             propertyId={fav.property?._id}
-            onUnsave={handleUnsave} 
+            onUnsave={handleUnsave}
           />
         ))
       )}
@@ -620,9 +634,9 @@ export default function BuyerDashboard() {
         <EmptyState icon="📅" title="No visits scheduled" sub="Schedule property visits to track them here" btn="Browse Properties" to="/properties" />
       ) : (
         visits.map(visit => (
-          <VisitCard 
-            key={visit._id} 
-            visit={visit} 
+          <VisitCard
+            key={visit._id}
+            visit={visit}
             onCancel={handleCancelVisit}
           />
         ))
@@ -707,12 +721,13 @@ export default function BuyerDashboard() {
           {/* Tabs */}
           <div style={{ display: 'flex', gap: 6, overflowX: 'auto', scrollbarWidth: 'none' }}>
             {TABS.map((t, i) => (
-              <button key={t} onClick={() => setTab(i)} style={{ padding: '10px 22px', borderRadius: 40, border: 'none', fontSize: 14, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: "'DM Sans',sans-serif", transition: 'all 0.2s',
+              <button key={t} onClick={() => setTab(i)} style={{
+                padding: '10px 22px', borderRadius: 40, border: 'none', fontSize: 14, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: "'DM Sans',sans-serif", transition: 'all 0.2s',
                 background: tab === i ? 'linear-gradient(135deg,#7c3aed,#6d28d9)' : 'rgba(124,58,237,0.08)',
                 color: tab === i ? '#fff' : '#7c3aed',
               }}
-              onMouseEnter={e => { if (tab !== i) e.currentTarget.style.background = 'rgba(124,58,237,0.15)'; }}
-              onMouseLeave={e => { if (tab !== i) e.currentTarget.style.background = 'rgba(124,58,237,0.08)'; }}>
+                onMouseEnter={e => { if (tab !== i) e.currentTarget.style.background = 'rgba(124,58,237,0.15)'; }}
+                onMouseLeave={e => { if (tab !== i) e.currentTarget.style.background = 'rgba(124,58,237,0.08)'; }}>
                 {t}
                 {i === 0 && saved.length > 0 && (
                   <span style={{ marginLeft: 6, background: tab === i ? '#fff' : '#7c3aed', color: tab === i ? '#7c3aed' : '#fff', borderRadius: 20, padding: '0 6px', fontSize: 11 }}>
