@@ -104,3 +104,5 @@ export const supportService = {
   getAllTickets: () => api.get('/support'),
   updateTicket: (id, data) => api.put(`/support/${id}`, data),
 };
+
+export { default as notificationService } from './notificationService';

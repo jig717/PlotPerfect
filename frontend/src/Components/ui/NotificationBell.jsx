@@ -1,36 +1,8 @@
-﻿import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { inquiryService, propertyService, threadService, userService } from '../../services'
+import { notificationService } from '../../services'
 import { toast } from 'react-toastify'
-
-const listFrom = (payload) => {
-  if (Array.isArray(payload)) return payload
-  if (Array.isArray(payload?.data)) return payload.data
-  return []
-}
-
-const normalizeRole = (role) => String(role || '').trim().toLowerCase()
-
-const supportsInquiryAlerts = (role) =>
-  ['agent', 'owner', 'admin', 'support'].includes(normalizeRole(role))
-
-const supportsAdminEntityAlerts = (role) =>
-  ['admin', 'support'].includes(normalizeRole(role))
-
-const getId = (value) => {
-  if (!value) return null
-  if (typeof value === 'string') return value
-  if (value._id) return value._id
-  if (value.id) return value.id
-  return null
-}
-
-const compactText = (value, limit = 70) => {
-  const text = String(value || '').trim()
-  if (!text) return 'New update'
-  if (text.length <= limit) return text
-  return `${text.slice(0, limit - 3)}...`
-}
+import { getDashboardPath } from '../../utils'
 
 const formatTime = (value) => {
   if (!value) return ''
@@ -39,254 +11,51 @@ const formatTime = (value) => {
   return date.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
 }
 
-const getDashboardRoute = (role) => {
-  const normalized = normalizeRole(role)
-  if (normalized === 'admin') return '/admin'
-  if (normalized === 'support') return '/support'
-  if (normalized === 'agent') return '/dashboard/agent'
-  if (normalized === 'owner') return '/dashboard/owner'
-  return '/dashboard/buyer'
-}
-
 export default function NotificationBell({ user }) {
   const navigate = useNavigate()
   const [isOpen, setIsOpen] = useState(false)
   const [items, setItems] = useState([])
-  const [refreshToken, setRefreshToken] = useState(0)
   const rootRef = useRef(null)
-  const seenRef = useRef({})
-  const bootRef = useRef(false)
 
-  const storageKey = useMemo(
-    () => (user?._id ? `plotperfect.notifications.${user._id}` : null),
-    [user?._id]
-  )
-
-  const unreadCount = useMemo(
-    () => items.filter((item) => !item.read).length,
-    [items]
-  )
-
-  const persistSeen = (nextSeen) => {
-    seenRef.current = nextSeen
-    if (!storageKey) return
-    try {
-      localStorage.setItem(storageKey, JSON.stringify(nextSeen))
-    } catch {
-      // ignore local storage write issues
-    }
-  }
-
-  const mergeItems = (incoming) => {
-    if (!incoming.length) return
-    setItems((prev) => {
-      const map = new Map(prev.map((item) => [item.id, item]))
-      incoming.forEach((item) => map.set(item.id, item))
-      return Array.from(map.values())
-        .sort((a, b) => b.timestamp - a.timestamp)
-        .slice(0, 24)
-    })
-  }
-
-  useEffect(() => {
-    if (!storageKey) return
-    try {
-      seenRef.current = JSON.parse(localStorage.getItem(storageKey) || '{}')
-    } catch {
-      seenRef.current = {}
-    }
-    setItems([])
-    bootRef.current = false
-    setRefreshToken((value) => value + 1)
-  }, [storageKey])
+  const unreadCount = items.filter((item) => !item.read).length
 
   useEffect(() => {
     if (!user?._id) return
     let cancelled = false
 
     const poll = async () => {
-      const seen = { ...seenRef.current }
-      const incoming = []
-      const booting = !bootRef.current
-
       try {
-        const threadPayload = await threadService.getMine()
-        const threads = listFrom(threadPayload)
-        const changedThreads = threads.filter((thread) => {
-          const threadId = thread?._id
-          const lastTs = thread?.lastMessageAt ? new Date(thread.lastMessageAt).getTime() : 0
-          if (!threadId || !lastTs) return false
-
-          const sourceKey = `thread:${threadId}`
-          if (booting) {
-            seen[sourceKey] = Math.max(Number(seen[sourceKey] || 0), lastTs)
-            return false
+        const data = await notificationService.getNotifications()
+        if (cancelled) return
+        
+        const newNotifications = data?.data || []
+        
+        // Show toasts for newly arriving notifications if they weren't in state previously
+        setItems(prevItems => {
+          if (prevItems.length > 0) {
+            const existingIds = new Set(prevItems.map(i => i._id));
+            const freshUnread = newNotifications.filter(n => !n.read && !existingIds.has(n._id));
+            
+            if (freshUnread.length > 0) {
+              const newest = freshUnread[0];
+              toast.info(`${newest.sender} - ${newest.message}`);
+            }
           }
-          return lastTs > Number(seen[sourceKey] || 0)
-        })
+          return newNotifications;
+        });
 
-        const latestPairs = await Promise.all(
-          changedThreads.slice(0, 8).map(async (thread) => {
-            try {
-              const messagesPayload = await threadService.getMessages(thread._id)
-              const messages = listFrom(messagesPayload)
-              return { thread, latest: messages[messages.length - 1] }
-            } catch {
-              return { thread, latest: null }
-            }
-          })
-        )
-
-        latestPairs.forEach(({ thread, latest }) => {
-          const lastTs = thread?.lastMessageAt ? new Date(thread.lastMessageAt).getTime() : 0
-          const sourceKey = `thread:${thread._id}`
-          seen[sourceKey] = Math.max(Number(seen[sourceKey] || 0), lastTs)
-
-          if (!latest) return
-          if (String(getId(latest.sender)) === String(user._id)) return
-
-          incoming.push({
-            id: `${sourceKey}:${lastTs}`,
-            sourceKey,
-            type: 'message',
-            threadId: thread._id,
-            sender: latest?.sender?.name || latest?.sender?.email || 'New message',
-            preview: compactText(latest?.content || thread?.title || 'You have a new message'),
-            timestamp: lastTs,
-            read: false,
-          })
-        })
-      } catch {
-        // silent polling failure
+      } catch (error) {
+        console.error("Failed to fetch notifications", error)
       }
-
-      try {
-        if (supportsInquiryAlerts(user?.role)) {
-          const role = normalizeRole(user?.role)
-          const inquiryPayload =
-            role === 'agent' || role === 'owner'
-              ? await inquiryService.getForAgent()
-              : await inquiryService.getAll()
-          const inquiries = listFrom(inquiryPayload)
-
-          inquiries.forEach((inquiry) => {
-            const inquiryId = inquiry?._id
-            const createdTs = inquiry?.createdAt ? new Date(inquiry.createdAt).getTime() : 0
-            if (!inquiryId || !createdTs) return
-
-            const sourceKey = `inquiry:${inquiryId}`
-            if (booting) {
-              seen[sourceKey] = Math.max(Number(seen[sourceKey] || 0), createdTs)
-              return
-            }
-            if (createdTs <= Number(seen[sourceKey] || 0)) return
-
-            seen[sourceKey] = createdTs
-            incoming.push({
-              id: `${sourceKey}:${createdTs}`,
-              sourceKey,
-              type: 'inquiry',
-              sender: inquiry?.user?.name || inquiry?.user?.email || inquiry?.name || 'Buyer',
-              preview: compactText(
-                inquiry?.message || `New inquiry on ${inquiry?.property?.title || 'a property'}`
-              ),
-              timestamp: createdTs,
-              read: false,
-            })
-          })
-        }
-      } catch {
-        // silent polling failure
-      }
-
-      try {
-        if (supportsAdminEntityAlerts(user?.role)) {
-          const [usersPayload, propertiesPayload] = await Promise.all([
-            userService.getAllUsers(),
-            propertyService.getAll({ limit: 100 }),
-          ])
-
-          listFrom(usersPayload).forEach((entry) => {
-            const entityId = entry?._id
-            const createdTs = entry?.createdAt ? new Date(entry.createdAt).getTime() : 0
-            if (!entityId || !createdTs) return
-
-            const sourceKey = `user:${entityId}`
-            if (booting) {
-              seen[sourceKey] = Math.max(Number(seen[sourceKey] || 0), createdTs)
-              return
-            }
-            if (createdTs <= Number(seen[sourceKey] || 0)) return
-
-            seen[sourceKey] = createdTs
-            incoming.push({
-              id: `${sourceKey}:${createdTs}`,
-              sourceKey,
-              type: 'user',
-              entityId,
-              sender: entry?.name || entry?.email || 'New user',
-              preview: compactText(`${entry?.name || 'A new user'} joined as ${entry?.role || 'user'}`),
-              timestamp: createdTs,
-              read: false,
-            })
-          })
-
-          listFrom(propertiesPayload).forEach((entry) => {
-            const entityId = entry?._id
-            const createdTs = entry?.createdAt ? new Date(entry.createdAt).getTime() : 0
-            if (!entityId || !createdTs) return
-
-            const sourceKey = `property:${entityId}`
-            if (booting) {
-              seen[sourceKey] = Math.max(Number(seen[sourceKey] || 0), createdTs)
-              return
-            }
-            if (createdTs <= Number(seen[sourceKey] || 0)) return
-
-            seen[sourceKey] = createdTs
-            incoming.push({
-              id: `${sourceKey}:${createdTs}`,
-              sourceKey,
-              type: 'property',
-              entityId,
-              sender: entry?.owner?.name || entry?.title || 'New property',
-              preview: compactText(`New property listed: ${entry?.title || 'Untitled property'}`),
-              timestamp: createdTs,
-              read: false,
-            })
-          })
-        }
-      } catch {
-        // silent polling failure
-      }
-
-      if (cancelled) return
-      persistSeen(seen)
-      if (incoming.length > 0 && bootRef.current) {
-        const newest = [...incoming].sort((a, b) => b.timestamp - a.timestamp)[0]
-        if (newest) {
-          const label =
-            newest.type === 'inquiry'
-              ? 'New inquiry'
-              : newest.type === 'user'
-                ? 'New user'
-                : newest.type === 'property'
-                  ? 'New property'
-                  : 'New message'
-          toast.info(`${label} from ${newest.sender}`)
-        }
-      }
-      mergeItems(incoming)
-      if (!bootRef.current) bootRef.current = true
     }
 
     poll()
-    const timer = window.setInterval(poll, 10000)
+    const timer = window.setInterval(poll, 5000) // Poll every 5 seconds as requested
     return () => {
       cancelled = true
       window.clearInterval(timer)
     }
-  }, [refreshToken, user?._id, user?.role])
+  }, [user?._id])
 
   useEffect(() => {
     if (!isOpen) return
@@ -311,36 +80,38 @@ export default function NotificationBell({ user }) {
   }, [isOpen])
 
   const markAsRead = async (item) => {
-    setItems((prev) => prev.map((entry) => (entry.id === item.id ? { ...entry, read: true } : entry)))
+    // Optimistic UI update
+    setItems((prev) => prev.map((entry) => (entry._id === item._id ? { ...entry, read: true } : entry)))
 
-    const nextSeen = {
-      ...seenRef.current,
-      [item.sourceKey]: Math.max(
-        Number(seenRef.current[item.sourceKey] || 0),
-        Number(item.timestamp || 0)
-      ),
+    try {
+      await notificationService.markAsRead(item._id)
+    } catch {
+      // Revert if failed
+      setItems((prev) => prev.map((entry) => (entry._id === item._id ? { ...entry, read: false } : entry)))
     }
-    persistSeen(nextSeen)
-
-    if (item.type === 'message' && item.threadId) {
-      try {
-        await threadService.markRead(item.threadId)
-      } catch {
-        // ignore mark-read failures
-      }
+  }
+  
+  const markAllAsRead = async () => {
+    setItems((prev) => prev.map((entry) => ({ ...entry, read: true })))
+    try {
+      await notificationService.markAllAsRead()
+    } catch (e) {
+      console.error(e);
     }
   }
 
   const openNotification = async (item) => {
-    await markAsRead(item)
+    if (!item.read) {
+       await markAsRead(item)
+    }
     setIsOpen(false)
 
-    if (item.type === 'property' && item.entityId) {
-      navigate(`/property/${item.entityId}`)
+    if (item.type === 'PROPERTY' && item.referenceId) {
+      navigate(`/property/${item.referenceId}`)
       return
     }
 
-    navigate(getDashboardRoute(user?.role))
+    navigate(getDashboardPath(user?.role))
   }
 
   return (
@@ -413,16 +184,21 @@ export default function NotificationBell({ user }) {
             zIndex: 1200,
           }}
         >
-          <div style={{ fontSize: 14, fontWeight: 800, color: '#1a0a2e', marginBottom: 8 }}>
-            Notifications
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <div style={{ fontSize: 14, fontWeight: 800, color: '#1a0a2e' }}>
+              Notifications
+            </div>
+            {unreadCount > 0 && (
+               <button onClick={markAllAsRead} style={{ fontSize: 12, color: '#7c3aed', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>Mark all as read</button>
+            )}
           </div>
           {items.length === 0 ? (
             <div style={{ fontSize: 13, color: 'rgba(26,10,46,0.55)' }}>No new notifications</div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {[...items].sort((a, b) => b.timestamp - a.timestamp).map((item) => (
+              {items.map((item) => (
                 <div
-                  key={item.id}
+                  key={item._id}
                   style={{
                     border: '1px solid rgba(124,58,237,0.12)',
                     borderRadius: 10,
@@ -440,17 +216,17 @@ export default function NotificationBell({ user }) {
                         <div style={{ fontSize: 13, fontWeight: 700, color: '#1a0a2e' }}>{item.sender}</div>
                       </div>
                     </div>
-                    <div style={{ fontSize: 11, color: 'rgba(26,10,46,0.5)' }}>{formatTime(item.timestamp)}</div>
+                    <div style={{ fontSize: 11, color: 'rgba(26,10,46,0.5)' }}>{formatTime(item.createdAt)}</div>
                   </div>
                   <div style={{ fontSize: 12.5, color: 'rgba(26,10,46,0.72)', margin: '4px 0 8px' }}>
-                    {item.preview}
+                    {item.message}
                   </div>
                   <div style={{ fontSize: 10.5, color: 'rgba(26,10,46,0.5)', marginBottom: 8 }}>
-                    {item.type === 'message'
+                    {item.type === 'MESSAGE'
                       ? 'New message'
-                      : item.type === 'inquiry'
+                      : item.type === 'INQUIRY'
                         ? 'New inquiry'
-                        : item.type === 'user'
+                        : item.type === 'USER'
                           ? 'New user registration'
                           : 'New property listing'}
                   </div>
@@ -501,4 +277,3 @@ export default function NotificationBell({ user }) {
     </div>
   )
 }
-

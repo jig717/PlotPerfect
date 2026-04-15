@@ -7,22 +7,22 @@ import { useAuth } from '../../context/AuthContext';
 
 
 const styles = {
-  wrap: { minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(135deg, #1a0f0f 0%, #2d1810 50%, #3d1f10 100%)", padding: "20px" },
-  card: { background: "rgba(255,248,240,0.08)", backdropFilter: "blur(20px)", padding: "40px", borderRadius: "20px", width: "100%", maxWidth: "380px", boxShadow: "0 25px 50px rgba(0,0,0,0.4)" },
-  title: { fontSize: "28px", fontWeight: "700", textAlign: "center", marginBottom: "5px", color: "#fff" },
-  sub: { textAlign: "center", color: "rgba(255,255,255,0.6)", marginBottom: "25px", fontSize: "14px" },
-  input: { width: "100%", padding: "14px 14px 14px 45px", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "12px", fontSize: "14px", background: "rgba(255,255,255,0.05)", color: "#fff", outline: "none", boxSizing: "border-box", marginBottom: "15px" },
-  icon: { position: "absolute", left: "14px", top: "50%", transform: "translateY(-50%)", width: "18px", height: "18px", color: "rgba(255,255,255,0.4)" },
+  wrap: { minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f9f9ff", padding: "20px" },
+  card: { background: "#fff", padding: "40px", borderRadius: "20px", width: "100%", maxWidth: "380px", boxShadow: "0 25px 50px rgba(124,58,237,0.1)", border: "1px solid rgba(124,58,237,0.08)" },
+  title: { fontSize: "28px", fontWeight: "700", textAlign: "center", marginBottom: "5px", color: "#1a0a2e" },
+  sub: { textAlign: "center", color: "rgba(26,10,46,0.6)", marginBottom: "25px", fontSize: "14px" },
+  input: { width: "100%", padding: "14px 14px 14px 45px", border: "1px solid rgba(124,58,237,0.2)", borderRadius: "12px", fontSize: "14px", background: "#f9f9ff", color: "#1a0a2e", outline: "none", boxSizing: "border-box", marginBottom: "15px" },
+  icon: { position: "absolute", left: "14px", top: "50%", transform: "translateY(-50%)", width: "18px", height: "18px", color: "rgba(124,58,237,0.5)" },
   inpWrap: { position: "relative", marginBottom: "15px" },
-  toggle: { position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.4)", padding: "4px" },
-  btn: { width: "100%", padding: "14px", background: "linear-gradient(135deg, #f97316 0%, #ea580c 100%)", color: "#fff", border: "none", borderRadius: "12px", fontSize: "15px", fontWeight: "600", cursor: "pointer", marginTop: "10px" },
+  toggle: { position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "rgba(124,58,237,0.5)", padding: "4px" },
+  btn: { width: "100%", padding: "14px", background: "linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)", color: "#fff", border: "none", borderRadius: "12px", fontSize: "15px", fontWeight: "600", cursor: "pointer", marginTop: "10px" },
   div: { display: "flex", alignItems: "center", margin: "20px 0" },
-  line: { flex: 1, height: "1px", background: "rgba(255,255,255,0.15)" },
-  or: { padding: "0 12px", color: "rgba(255,255,255,0.5)", fontSize: "12px" },
-  ggBtn: { width: "100%", padding: "12px", background: "rgba(255,255,255,0.1)", color: "#fff", border: "1px solid rgba(255,255,255,0.2)", borderRadius: "12px", fontSize: "14px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" },
-  link: { textAlign: "center", marginTop: "20px", color: "rgba(255,255,255,0.6)", fontSize: "13px" },
-  a: { color: "#fb923c", textDecoration: "none", fontWeight: "600" },
-  err: { color: "#fca5a5", fontSize: "11px", marginTop: "-12px", marginBottom: "8px" }
+  line: { flex: 1, height: "1px", background: "rgba(124,58,237,0.1)" },
+  or: { padding: "0 12px", color: "rgba(26,10,46,0.5)", fontSize: "12px" },
+  ggBtn: { width: "100%", padding: "12px", background: "#ffffff", color: "#1a0a2e", border: "1px solid rgba(124,58,237,0.2)", borderRadius: "12px", fontSize: "14px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", fontWeight: "500" },
+  link: { textAlign: "center", marginTop: "20px", color: "rgba(26,10,46,0.6)", fontSize: "13px" },
+  a: { color: "#7c3aed", textDecoration: "none", fontWeight: "600" },
+  err: { color: "#ef4444", fontSize: "11px", marginTop: "-12px", marginBottom: "8px" }
 };
 
 export default function LoginPage() {
@@ -94,7 +94,7 @@ if (result.success) {
   };
   return (
     <>
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}}.btn:hover{transform:translateY(-2px);box-shadow:0 10px 30px rgba(249,115,22,0.4)}.input::placeholder{color:rgba(255,255,255,0.4)}.input:focus{border-color:#f97316;background:rgba(255,255,255,0.1)}`}</style>
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}.btn:hover{transform:translateY(-2px);box-shadow:0 10px 30px rgba(124,58,237,0.3)}.input::placeholder{color:rgba(26,10,46,0.4)}.input:focus{border-color:#7c3aed;background:#fff}`}</style>
       <ToastContainer position="top-right" autoClose={3000} />
       <div style={styles.wrap}>
         <div style={styles.card}>

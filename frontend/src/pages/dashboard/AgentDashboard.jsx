@@ -1082,6 +1082,15 @@ export default function AgentDashboard() {
     }
   }, [user?._id])
 
+  
+  useEffect(() => {
+    if (!user?._id) return;
+    const intervalId = setInterval(() => {
+      fetchAgentVisits(listings);
+    }, 10000);
+    return () => clearInterval(intervalId);
+  }, [user?._id, listings]);
+
   const handleDeleteListing = async (id) => {
     if (!window.confirm('Delete this listing?')) return
     try {

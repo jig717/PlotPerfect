@@ -232,9 +232,8 @@ function Gallery({ images = [], title }) {
               key={i}
               src={getImageUrl(img, 100, 70)}
               onClick={() => setActive(i)}
-              className={`w-20 h-14 rounded-lg object-cover cursor-pointer border-2 ${
-                active === i ? "border-[#7c3aed]" : "border-transparent"
-              } opacity-${active === i ? 1 : 60}`}
+              className={`w-20 h-14 rounded-lg object-cover cursor-pointer border-2 ${active === i ? "border-[#7c3aed]" : "border-transparent"
+                } opacity-${active === i ? 1 : 60}`}
             />
           ))}
         </div>
@@ -266,11 +265,6 @@ function Section({ title, children }) {
 function FloorPlansSection({ property }) {
   const floorPlans = normalizeFloorPlans(property);
   const [activePlanId, setActivePlanId] = useState(floorPlans[0]?.id || null);
-
-  useEffect(() => {
-    setActivePlanId(floorPlans[0]?.id || null);
-  }, [property?._id, floorPlans.length]);
-
   if (!floorPlans.length) return null;
 
   const activePlan = floorPlans.find((plan) => plan.id === activePlanId) || floorPlans[0];
@@ -284,11 +278,10 @@ function FloorPlansSection({ property }) {
               key={plan.id}
               type="button"
               onClick={() => setActivePlanId(plan.id)}
-              className={`px-4 py-2 rounded-full text-sm border transition ${
-                activePlan?.id === plan.id
-                  ? "bg-[#eef4ff] border-[#93c5fd] text-[#0f3d91] font-semibold"
-                  : "bg-white border-[rgba(124,58,237,0.14)] text-[rgba(26,10,46,0.7)] hover:border-[#93c5fd]"
-              }`}
+              className={`px-4 py-2 rounded-full text-sm border transition ${activePlan?.id === plan.id
+                ? "bg-[#eef4ff] border-[#93c5fd] text-[#0f3d91] font-semibold"
+                : "bg-white border-[rgba(124,58,237,0.14)] text-[rgba(26,10,46,0.7)] hover:border-[#93c5fd]"
+                }`}
             >
               {plan.title}
             </button>
@@ -534,6 +527,7 @@ function ScheduleVisitModal({ property, onClose, onSuccess }) {
     const ownerId =
       property?.owner?._id ||
       property?.owner?.id ||
+      (typeof property?.owner === 'string' ? property.owner : null) ||
       property?.ownerId ||
       property?.owner_id ||
       null;
@@ -667,7 +661,7 @@ export default function PropertyDetailPage() {
 
   const loadPropertyDetails = async (propertyId, options = {}) => {
     const { silent = false } = options;
-    
+
     // Safety check: Prevent fetching if ID is missing or literally "undefined"
     if (!propertyId || propertyId === "undefined") {
       if (!silent) {
@@ -720,7 +714,7 @@ export default function PropertyDetailPage() {
     const fetchProperty = async () => {
       try {
         await loadPropertyDetails(id);
-      } catch (err) {
+      } catch {
         if (cancelled) return;
       }
     };
@@ -740,7 +734,7 @@ export default function PropertyDetailPage() {
         const response = await reviewService.getByProperty(id);
         const list = Array.isArray(response?.data) ? response.data : [];
         if (!cancelled) setReviews(list);
-      } catch (err) {
+      } catch {
         // Gracefully fallback to empty list when no reviews exist yet.
         if (!cancelled) setReviews([]);
       } finally {
@@ -807,10 +801,10 @@ export default function PropertyDetailPage() {
         const visits = Array.isArray(response)
           ? response
           : Array.isArray(response?.visits)
-          ? response.visits
-          : Array.isArray(response?.data)
-          ? response.data
-          : [];
+            ? response.visits
+            : Array.isArray(response?.data)
+              ? response.data
+              : [];
 
         const alreadyScheduled = visits.some((visit) => {
           const visitPropertyId =
@@ -956,7 +950,7 @@ export default function PropertyDetailPage() {
     try {
       await navigator.clipboard.writeText(url);
       toast.success("Link copied to clipboard!");
-    } catch (err) {
+    } catch {
       const textArea = document.createElement("textarea");
       textArea.value = url;
       document.body.appendChild(textArea);
@@ -1053,14 +1047,14 @@ export default function PropertyDetailPage() {
   const badgeLabel =
     property.listingLabel ||
     { sale: "For Sale", rent: "For Rent", pg: "PG", lease: "Lease" }[
-      normalizedListingType
+    normalizedListingType
     ] || "For Sale";
   const badgeColor =
     isPropertyBooked
       ? "#0f766e"
       : { sale: "#7c3aed", rent: "#0891b2", pg: "#059669", lease: "#d97706" }[
       normalizedListingType
-    ] || "#7c3aed";
+      ] || "#7c3aed";
 
   const detailRows = [
     ["Property Type", property.propertyType],
@@ -1206,7 +1200,7 @@ export default function PropertyDetailPage() {
                 </div>
               </Section>
 
-              <FloorPlansSection property={property} />
+              <FloorPlansSection key={property?._id} property={property} />
             </div>
           </div>
 
@@ -1281,8 +1275,8 @@ export default function PropertyDetailPage() {
                 {checkingVisitStatus
                   ? "Checking visit status..."
                   : hasExistingVisit
-                  ? "View Scheduled Visit"
-                  : "Schedule a Visit"}
+                    ? "View Scheduled Visit"
+                    : "Schedule a Visit"}
               </button>
 
               {Boolean(property?.canUseAdvancePayment) && (
@@ -1341,19 +1335,18 @@ export default function PropertyDetailPage() {
                 <button
                   onClick={handleSave}
                   disabled={isToggling}
-                  className={`flex-1 py-3 rounded-xl border font-semibold transition ${
-                    saved
-                      ? "border-[#7c3aed] bg-[#7c3aed]/10 text-[#7c3aed]"
-                      : "border-[rgba(124,58,237,0.3)] text-[#7c3aed] hover:bg-[#7c3aed] hover:text-white"
-                  }`}
+                  className={`flex-1 py-3 rounded-xl border font-semibold transition ${saved
+                    ? "border-[#7c3aed] bg-[#7c3aed]/10 text-[#7c3aed]"
+                    : "border-[rgba(124,58,237,0.3)] text-[#7c3aed] hover:bg-[#7c3aed] hover:text-white"
+                    }`}
                 >
                   {isToggling
                     ? saved
                       ? "Removing..."
                       : "Saving..."
                     : saved
-                    ? "❤️ Saved"
-                    : "🤍 Save"}
+                      ? "❤️ Saved"
+                      : "🤍 Save"}
                 </button>
                 <button
                   onClick={handleShare}
@@ -1394,7 +1387,7 @@ export default function PropertyDetailPage() {
           property={property}
           onClose={() => setShowAdvancePaymentModal(false)}
           onSuccess={() => {
-            loadPropertyDetails(property?._id || id, { silent: true }).catch(() => {});
+            loadPropertyDetails(property?._id || id, { silent: true }).catch(() => { });
           }}
         />
       )}
@@ -1403,7 +1396,7 @@ export default function PropertyDetailPage() {
           property={property}
           onClose={() => setShowFullPaymentModal(false)}
           onSuccess={() => {
-            loadPropertyDetails(property?._id || id, { silent: true }).catch(() => {});
+            loadPropertyDetails(property?._id || id, { silent: true }).catch(() => { });
           }}
         />
       )}
@@ -1479,12 +1472,13 @@ function AdvancePaymentModal({ property, onClose, onSuccess }) {
       if (buyerContact) prefill.contact = buyerContact;
 
       await new Promise((resolve, reject) => {
-        const razorpay = new window.Razorpay({
+        const options = {
           key: razorpayKeyId,
           amount: order.amount,
           currency: order.currency || "INR",
           name: "PlotPerfect",
           description: `Advance payment for ${property?.title || "property"}`,
+          image: LOGO_URL,
           order_id: order.id,
           prefill,
           theme: {
@@ -1517,27 +1511,36 @@ function AdvancePaymentModal({ property, onClose, onSuccess }) {
               reject(
                 new Error(
                   verificationError?.response?.data?.message ||
-                    "Payment verification failed."
+                  "Payment verification failed."
                 )
               );
             }
           },
-        });
+        };
 
-        razorpay.on("payment.failed", (response) => {
-          const reason =
-            response?.error?.description ||
-            response?.error?.reason ||
-            response?.error?.code ||
-            "Razorpay payment failed.";
-          reject(new Error(reason));
-        });
+        try {
+          const razorpay = new window.Razorpay(options);
 
-        razorpay.open();
+          razorpay.on("payment.failed", (response) => {
+            // Log the failure to console for debugging
+            console.warn("Razorpay payment attempt failed:", response?.error);
+
+            // We DON'T reject here because the user can usually try again 
+            // with a different card/method without closing the modal.
+            // Razorpay's modal shows its own error message to the user.
+          });
+
+          razorpay.open();
+        } catch (initError) {
+          console.error("Failed to initialize Razorpay object:", initError);
+          reject(new Error("Could not initialize payment gateway."));
+        }
       });
     } catch (error) {
-      console.error("Advance payment flow failed:", error?.response?.data || error);
-      toast.error(getPaymentErrorMessage(error, "Failed to complete advance payment/token."));
+      if (error?.message !== "Payment was cancelled.") {
+        console.error("Advance payment flow failed:", error?.response?.data || error);
+        toast.error(getPaymentErrorMessage(error, "Failed to complete advance payment/token."));
+      }
     } finally {
       setLoading(false);
     }
@@ -1733,7 +1736,7 @@ function FullPaymentModal({ property, onClose, onSuccess }) {
               reject(
                 new Error(
                   verificationError?.response?.data?.message ||
-                    "Payment verification failed."
+                  "Payment verification failed."
                 )
               );
             }
@@ -1742,11 +1745,11 @@ function FullPaymentModal({ property, onClose, onSuccess }) {
 
         try {
           const razorpay = new window.Razorpay(options);
-          
+
           razorpay.on("payment.failed", (response) => {
             // Log the failure to console for debugging
             console.warn("Razorpay payment attempt failed:", response?.error);
-            
+
             // We DON'T reject here because the user can usually try again 
             // with a different card/method without closing the modal.
             // Razorpay's modal shows its own error message to the user.

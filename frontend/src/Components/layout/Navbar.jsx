@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { getDashboardPath, resolveApiAssetUrl } from '../../utils'
+import NotificationBell from '../ui/NotificationBell'
 
 const NAV_TABS = ['Buy', 'Rent', 'PG / Hostel', 'Commercial', 'Post Property']
 
@@ -91,68 +92,71 @@ export default function Navbar() {
         {/* Desktop Right Buttons */}
         <div className="hidden md:flex gap-2">
           {user ? (
-            <div className="relative user-dropdown">
-              <button
-                onClick={toggleDropdown}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-[rgba(124,58,237,0.2)] bg-transparent hover:bg-[rgba(124,58,237,0.04)] transition"
-              >
-                <div className="w-8 h-8 rounded-full overflow-hidden shrink-0 bg-linear-to-br from-[#a78bfa] to-[#7c3aed] flex items-center justify-center text-white text-sm font-bold">
-                  {avatarSource ? (
-                    <img src={avatarSource} alt={user.name} className="w-full h-full rounded-full object-cover" />
-                  ) : (
-                    getInitials(user.name || user.email)
-                  )}
-                </div>
-                <span className="text-sm font-medium text-[rgba(26,10,46,0.7)]">
-                  {user.name?.split(' ')[0] || 'Profile'}
-                </span>
-                <svg
-                  className={`w-4 h-4 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`}
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
+            <div className="flex items-center gap-2">
+              <NotificationBell user={user} />
+              <div className="relative user-dropdown">
+                <button
+                  onClick={toggleDropdown}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-[rgba(124,58,237,0.2)] bg-transparent hover:bg-[rgba(124,58,237,0.04)] transition"
                 >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
+                  <div className="w-8 h-8 rounded-full overflow-hidden shrink-0 bg-linear-to-br from-[#a78bfa] to-[#7c3aed] flex items-center justify-center text-white text-sm font-bold">
+                    {avatarSource ? (
+                      <img src={avatarSource} alt={user.name} className="w-full h-full rounded-full object-cover" />
+                    ) : (
+                      getInitials(user.name || user.email)
+                    )}
+                  </div>
+                  <span className="text-sm font-medium text-[rgba(26,10,46,0.7)]">
+                    {user.name?.split(' ')[0] || 'Profile'}
+                  </span>
+                  <svg
+                    className={`w-4 h-4 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
 
-              {dropdownOpen && (
-                <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-[rgba(124,58,237,0.1)] overflow-hidden z-50">
-                  <button
-                    onClick={() => {
-                      navigate('/profile')
-                      setDropdownOpen(false)
+                {dropdownOpen && (
+                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-[rgba(124,58,237,0.1)] overflow-hidden z-50">
+                    <button
+                      onClick={() => {
+                        navigate('/profile')
+                        setDropdownOpen(false)
+                      }}
+                      className="w-full text-left px-4 py-2 text-sm text-[#1a0a2e] hover:bg-[rgba(124,58,237,0.08)] transition flex items-center gap-2"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      Profile
+                    </button>
+                    <button
+                      onClick={() => {
+                        navigate(getDashboardPath(user.role))
+                        setDropdownOpen(false)
                     }}
-                    className="w-full text-left px-4 py-2 text-sm text-[#1a0a2e] hover:bg-[rgba(124,58,237,0.08)] transition flex items-center gap-2"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    Profile
-                  </button>
-                  <button
-                    onClick={() => {
-                      navigate(getDashboardPath(user.role))
-                      setDropdownOpen(false)
-                  }}
-                    className="w-full text-left px-4 py-2 text-sm text-[#1a0a2e] hover:bg-[rgba(124,58,237,0.08)] transition flex items-center gap-2"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-                    </svg>
-                    Dashboard
-                  </button>
-                  <button
-                    onClick={handleLogout}
-                    className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition flex items-center gap-2"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                    </svg>
-                    Logout
-                  </button>
-                </div>
-              )}
+                      className="w-full text-left px-4 py-2 text-sm text-[#1a0a2e] hover:bg-[rgba(124,58,237,0.08)] transition flex items-center gap-2"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                      </svg>
+                      Dashboard
+                    </button>
+                    <button
+                      onClick={handleLogout}
+                      className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition flex items-center gap-2"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                      </svg>
+                      Logout
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           ) : (
             <>
@@ -228,6 +232,9 @@ export default function Navbar() {
             {/* Auth Buttons (mobile) */}
             {user ? (
               <div className="flex flex-col gap-2">
+                <div className="flex justify-end">
+                  <NotificationBell user={user} />
+                </div>
                 <button
                   className="w-full px-4 py-3 rounded-lg border border-[rgba(124,58,237,0.3)] text-[#7c3aed] font-semibold text-sm hover:bg-[#7c3aed] hover:text-white transition"
                   onClick={() => {
