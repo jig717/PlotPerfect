@@ -1383,17 +1383,43 @@ export default function AgentDashboard() {
     </div>,
   ]
 
+  const heroStats = [
+    { label: 'Listings', value: listings.length || 0 },
+    { label: 'Leads', value: leads.length || 0 },
+    { label: 'Visits', value: visits.length || 0 },
+    { label: 'Commission', value: formatPrice(stats.totalCommissionEarned || commissionAnalytics?.summary?.totalCommissionEarned || 0) },
+  ]
+
   return (
-    <div style={{ minHeight:'100vh', background:'#ffffff', fontFamily:"'DM Sans',sans-serif", color:'#1a0a2e' }}>
+    <div className="agent-shell" style={{ minHeight:'100vh', background:'linear-gradient(180deg, #f4fbff 0%, #f8f7ff 24%, #ffffff 100%)', fontFamily:"'DM Sans',sans-serif", color:'#1a0a2e', position:'relative', overflow:'hidden' }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@700;800&display=swap');
         *{box-sizing:border-box;}
+        .agent-shell::before {
+          content: '';
+          position: absolute;
+          inset: 0 0 auto;
+          height: 320px;
+          background:
+            radial-gradient(circle at top left, rgba(14,165,233,0.18), transparent 35%),
+            radial-gradient(circle at top right, rgba(124,58,237,0.16), transparent 38%);
+          pointer-events: none;
+        }
+        .agent-hero-stats {
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 12px;
+          margin-top: 18px;
+        }
         
         @media (max-width: 768px) {
           .ag-header-row {
             flex-direction: column !important;
             gap: 12px !important;
             align-items: flex-start !important;
+          }
+          .agent-hero-stats {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
           }
           .charts-row {
             grid-template-columns: 1fr !important;
@@ -1407,6 +1433,9 @@ export default function AgentDashboard() {
         }
         
         @media (max-width: 480px) {
+          .agent-hero-stats {
+            grid-template-columns: 1fr !important;
+          }
           .chart-container {
             height: 220px !important;
           }
@@ -1419,7 +1448,7 @@ export default function AgentDashboard() {
       `}</style>
 
       {/* Header */}
-      <div style={{ background:'#ffffff', backdropFilter:'blur(20px)', borderBottom:'0.5px solid rgba(124,58,237,0.12)', padding:'20px 6vw' }}>
+      <div style={{ background:'linear-gradient(135deg, rgba(255,255,255,0.97), rgba(240,249,255,0.95))', backdropFilter:'blur(20px)', borderBottom:'0.5px solid rgba(124,58,237,0.12)', padding:'20px 6vw 24px', boxShadow:'0 20px 60px rgba(14,165,233,0.08)' }}>
         <div style={{ maxWidth:1100, margin:'0 auto' }}>
           <div className="ag-header-row" style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20 }}>
             <div style={{ display:'flex', alignItems:'center', gap:14 }}>
@@ -1452,6 +1481,14 @@ export default function AgentDashboard() {
                   background: tab===i ? 'linear-gradient(135deg,#7c3aed,#6d28d9)' : 'rgba(124,58,237,0.08)',
                   color: tab===i ? '#fff' : '#7c3aed',
                 }}>{t}</button>
+            ))}
+          </div>
+          <div className="agent-hero-stats">
+            {heroStats.map((item) => (
+              <div key={item.label} style={{ padding: '16px 18px', borderRadius: 20, background: 'rgba(255,255,255,0.86)', border: '1px solid rgba(14,165,233,0.14)' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', color: 'rgba(26,10,46,0.45)', textTransform: 'uppercase' }}>{item.label}</div>
+                <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 24, fontWeight: 800, color: '#1a0a2e', marginTop: 10 }}>{item.value}</div>
+              </div>
             ))}
           </div>
         </div>

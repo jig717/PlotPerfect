@@ -155,7 +155,7 @@ function PropCard({ prop, index, isFavorite, onToggleFavorite }) {
 const chipLight = { background: '#f5f3ff', border: '1px solid rgba(124,58,237,0.1)', color: '#7c3aed', fontSize: 10, padding: '3px 8px', borderRadius: 6, fontWeight: 600 }
 
 /* ── Custom Select (Premium) ── */
-function CustomSelect({ value, onChange, options, label = 'Select' }) {
+function CustomSelect({ value, onChange, options }) {
   const [isOpen, setIsOpen] = useState(false);
   const selectedLabel = options.find(o => (o.value ?? o) === value)?.label ?? (value || 'Any');
 
@@ -342,7 +342,7 @@ function FilterGroupLight({ title, children }) {
 /* ── Main Page (light theme) ── */
 export default function PropertyListPage() {
   const { user } = useAuth()
-  const [searchParams, setSearchParams] = useSearchParams()
+  const [searchParams] = useSearchParams()
   const [properties, setProperties] = useState([])
   const [favorites, setFavorites] = useState([])
   const [loading, setLoading] = useState(true)
@@ -459,7 +459,7 @@ export default function PropertyListPage() {
         await userService.saveProperty(user._id, propertyId);
         toast.success('Saved to your list!');
       }
-    } catch (err) {
+    } catch {
       setFavorites(prev => isFav ? [...prev, propertyId] : prev.filter(id => id !== propertyId));
       toast.error('Failed to update favorites');
     }

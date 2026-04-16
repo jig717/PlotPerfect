@@ -10,6 +10,21 @@ import NotificationBell from '../../Components/ui/NotificationBell'
 
 const TABS = ['Overview', 'Saved Properties', 'Scheduled Visits', 'My Inquiries']
 
+const theme = {
+  bg: '#f5f3ff',
+  surface: '#ffffff',
+  surfaceSoft: '#f9f7ff',
+  border: 'rgba(109, 40, 217, 0.12)',
+  borderStrong: 'rgba(109, 40, 217, 0.22)',
+  text: '#1f1147',
+  textSoft: 'rgba(31, 17, 71, 0.64)',
+  textMute: 'rgba(31, 17, 71, 0.48)',
+  primary: '#6d28d9',
+  primaryDeep: '#4c1d95',
+  primarySoft: 'rgba(109, 40, 217, 0.08)',
+  shadow: '0 18px 45px rgba(76, 29, 149, 0.10)',
+}
+
 const extractVisitsList = (payload) => {
   if (Array.isArray(payload)) return payload
   if (Array.isArray(payload?.visits)) return payload.visits
@@ -18,9 +33,7 @@ const extractVisitsList = (payload) => {
 }
 
 const getVisitStatus = (visit) => visit?.status || visit?.visit_status || 'REQUESTED'
-
 const getVisitDate = (visit) => visit?.scheduledDate || visit?.scheduled_date || null
-
 const getVisitBuyerId = (visit) =>
   visit?.buyer?._id || visit?.buyer_id || visit?.buyerId || visit?.user?._id || visit?.userId || null
 
@@ -30,63 +43,122 @@ const extractThreads = (payload) => {
   return []
 }
 
-const getParticipantUserId = (participant) =>
-  participant?.user?._id || participant?.user || null
+const getParticipantUserId = (participant) => participant?.user?._id || participant?.user || null
 
-/* ── Stat Card ── */
-function StatCard({ icon, label, value }) {
+const baseCardStyle = {
+  background: theme.surface,
+  border: `1px solid ${theme.border}`,
+  borderRadius: 24,
+  boxShadow: theme.shadow,
+}
+
+const actionButtonBase = {
+  border: 'none',
+  cursor: 'pointer',
+  fontWeight: 700,
+  fontSize: 14,
+  transition: 'transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease, color 0.2s ease',
+}
+
+const getStatusTone = (status) => {
+  switch (String(status).toUpperCase()) {
+    case 'CONFIRMED':
+    case 'COMPLETED':
+      return { color: '#047857', background: 'rgba(16, 185, 129, 0.12)', border: 'rgba(16, 185, 129, 0.18)' }
+    case 'CANCELLED':
+      return { color: '#dc2626', background: 'rgba(239, 68, 68, 0.12)', border: 'rgba(239, 68, 68, 0.16)' }
+    default:
+      return { color: theme.primary, background: 'rgba(109, 40, 217, 0.10)', border: 'rgba(109, 40, 217, 0.16)' }
+  }
+}
+
+function DashboardShell({ children }) {
+  return <div style={{ ...baseCardStyle, padding: 24 }}>{children}</div>
+}
+
+function StatCard({ eyebrow, label, value, tone }) {
   return (
-    <div
-      style={{
-        background: '#ffffff',
-        border: '1px solid rgba(124,58,237,0.12)',
-        borderRadius: 16,
-        padding: '20px 24px',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
-        transition: 'all 0.25s cubic-bezier(0.2, 0, 0, 1)',
-        cursor: 'pointer',
-      }}
-      onMouseEnter={e => {
-        e.currentTarget.style.transform = 'translateY(-2px)';
-        e.currentTarget.style.boxShadow = '0 8px 24px rgba(124,58,237,0.12)';
-        e.currentTarget.style.borderColor = 'rgba(124,58,237,0.3)';
-      }}
-      onMouseLeave={e => {
-        e.currentTarget.style.transform = 'translateY(0)';
-        e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.02)';
-        e.currentTarget.style.borderColor = 'rgba(124,58,237,0.12)';
-      }}
-    >
-      <div style={{
-        width: 48, height: 48, borderRadius: 14, background: '#f0eeff',
-        border: '1px solid rgba(124,58,237,0.15)', display: 'flex',
-        alignItems: 'center', justifyContent: 'center', fontSize: 20, color: '#7c3aed'
-      }}>
-        {icon}
+    <div style={{ ...baseCardStyle, padding: 22, background: tone?.background || theme.surface, position: 'relative', overflow: 'hidden' }}>
+      <div style={{ position: 'absolute', top: -24, right: -18, width: 86, height: 86, borderRadius: '50%', background: tone?.orb || 'rgba(109, 40, 217, 0.10)' }} />
+      <div style={{ position: 'relative' }}>
+        <div style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', color: theme.textMute, marginBottom: 14 }}>{eyebrow}</div>
+        <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 34, fontWeight: 800, color: theme.text, lineHeight: 1 }}>{value}</div>
+        <div style={{ fontSize: 14, color: theme.textSoft, marginTop: 10 }}>{label}</div>
       </div>
-      <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 32, fontWeight: 800, color: '#1a0a2e', lineHeight: 1.2, marginTop: 12 }}>
-        {value}
-      </div>
-      <div style={{ fontSize: 14, color: 'rgba(26,10,46,0.5)', marginTop: 6 }}>{label}</div>
     </div>
   )
 }
 
-/* ── Property Row (with remove functionality) ── */
+function SectionHeading({ title, sub, action }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 16, marginBottom: 18, flexWrap: 'wrap' }}>
+      <div>
+        <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 26, fontWeight: 800, color: theme.text }}>{title}</div>
+        {sub ? <div style={{ fontSize: 14, color: theme.textSoft, marginTop: 4 }}>{sub}</div> : null}
+      </div>
+      {action}
+    </div>
+  )
+}
+
+function ActionButton({ children, onClick, variant = 'soft', disabled = false }) {
+  const styles =
+    variant === 'primary'
+      ? { background: `linear-gradient(135deg, ${theme.primary}, ${theme.primaryDeep})`, color: '#ffffff', boxShadow: '0 12px 24px rgba(109, 40, 217, 0.22)', padding: '12px 18px', borderRadius: 999 }
+      : variant === 'danger'
+        ? { background: 'rgba(239, 68, 68, 0.08)', color: '#dc2626', border: '1px solid rgba(239, 68, 68, 0.18)', padding: '10px 16px', borderRadius: 14 }
+        : { background: theme.primarySoft, color: theme.primary, border: `1px solid ${theme.borderStrong}`, padding: '10px 16px', borderRadius: 14 }
+
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      style={{ ...actionButtonBase, ...styles, opacity: disabled ? 0.65 : 1, cursor: disabled ? 'not-allowed' : 'pointer' }}
+      onMouseEnter={(event) => {
+        if (!disabled) event.currentTarget.style.transform = 'translateY(-2px)'
+      }}
+      onMouseLeave={(event) => {
+        event.currentTarget.style.transform = 'translateY(0)'
+      }}
+    >
+      {children}
+    </button>
+  )
+}
+
+function PropertyThumb({ property }) {
+  const imageSrc = resolveApiAssetUrl(property?.images?.[0] || property?.image || property?.thumbnail || '')
+
+  if (imageSrc) {
+    return <img src={imageSrc} alt={property?.title || 'Property'} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+  }
+
+  return (
+    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, rgba(109,40,217,0.14), rgba(167,139,250,0.26))', color: theme.primaryDeep, fontWeight: 800, fontSize: 22 }}>
+      PP
+    </div>
+  )
+}
+
+function PropertyMeta({ label, value }) {
+  return (
+    <div style={{ minWidth: 0 }}>
+      <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: theme.textMute, marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: 14, color: theme.textSoft, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value}</div>
+    </div>
+  )
+}
+
 function PropRow({ prop, onUnsave, favoriteId, propertyId }) {
   const navigate = useNavigate()
   const [isRemoving, setIsRemoving] = useState(false)
 
   if (!prop) {
     return (
-      <div style={{ padding: 16, background: '#f9f9ff', borderRadius: 12, border: '1px solid rgba(124,58,237,0.08)', textAlign: 'center', color: '#ef4444' }}>
-        ⚠️ Property data missing. Please remove this favorite.
-        {onUnsave && (
-          <button onClick={() => onUnsave(favoriteId, propertyId)} style={{ marginLeft: 12, padding: '4px 12px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
-            Remove
-          </button>
-        )}
-      </div>
+      <DashboardShell>
+        <div style={{ color: '#dc2626', fontWeight: 700, marginBottom: 10 }}>Property data is missing.</div>
+        {onUnsave ? <ActionButton onClick={() => onUnsave(favoriteId, propertyId)} variant="danger">Remove Broken Favorite</ActionButton> : null}
+      </DashboardShell>
     )
   }
 
@@ -97,339 +169,214 @@ function PropRow({ prop, onUnsave, favoriteId, propertyId }) {
     setIsRemoving(true)
     try {
       await onUnsave(favoriteId, prop._id)
-    } catch (error) {
-      // Error already handled in onUnsave (toast)
+    } catch {
+      // Parent already handles the toast message.
     } finally {
       setIsRemoving(false)
     }
   }
 
   return (
-    <div
-      style={{
-        display: 'grid', gridTemplateColumns: '80px 1fr auto 100px',
-        gap: 16, padding: '14px 20px', background: '#ffffff',
-        border: '1px solid rgba(124,58,237,0.08)', borderRadius: 14,
-        alignItems: 'center', transition: 'all 0.2s'
-      }}
-      onMouseEnter={e => {
-        e.currentTarget.style.borderColor = 'rgba(124,58,237,0.25)';
-        e.currentTarget.style.backgroundColor = '#fcfaff';
-        e.currentTarget.style.transform = 'translateX(2px)';
-      }}
-      onMouseLeave={e => {
-        e.currentTarget.style.borderColor = 'rgba(124,58,237,0.08)';
-        e.currentTarget.style.backgroundColor = '#ffffff';
-        e.currentTarget.style.transform = 'translateX(0)';
-      }}
-    >
-      <div style={{
-        width: 72, height: 60, borderRadius: 10, background: 'linear-gradient(135deg,#f0eeff,#e8e4ff)',
-        overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 20, color: '#7c3aed'
-      }}>
-        {prop.images?.[0] ? (
-          <img src={prop.images[0]} alt={prop.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-        ) : (
-          '🏠'
-        )}
-      </div>
-      <div>
-        <div style={{ fontSize: 15, fontWeight: 700, color: '#1a0a2e', marginBottom: 4 }}>{prop.title}</div>
-        <div style={{ fontSize: 13, color: 'rgba(26,10,46,0.5)' }}>{prop.city}</div>
-      </div>
-      <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 18, fontWeight: 800, color: '#1a0a2e' }}>
-        {formatPrice(prop.price)}
-      </div>
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-        <button 
-          onClick={() => {
-            const targetId = prop._id || prop.id;
-            if (targetId && targetId !== "undefined") {
-              navigate(`/property/${targetId}`);
-            } else {
-              toast.warn("Property details unavailable.");
-            }
-          }} 
-          style={{
-            padding: '6px 14px', borderRadius: 8, border: '1px solid rgba(124,58,237,0.3)',
-            background: 'none', color: '#7c3aed', fontSize: 12, fontWeight: 600,
-            cursor: 'pointer', transition: 'all 0.2s'
-          }}
-          onMouseEnter={e => {
-            e.currentTarget.style.background = '#7c3aed';
-            e.currentTarget.style.color = '#fff';
-          }}
-          onMouseLeave={e => {
-            e.currentTarget.style.background = 'none';
-            e.currentTarget.style.color = '#7c3aed';
-          }}
-        >
-          View
-        </button>
-        {onUnsave && (
-          <button
-            onClick={handleRemoveClick}
-            disabled={isRemoving}
-            style={{
-              padding: '6px 14px', borderRadius: 8, border: '1px solid rgba(239,68,68,0.3)',
-              background: isRemoving ? '#fecaca' : 'none',
-              color: isRemoving ? '#b91c1c' : '#ef4444',
-              fontSize: 12, fontWeight: 600,
-              cursor: isRemoving ? 'not-allowed' : 'pointer',
-              transition: 'all 0.2s'
-            }}
-            onMouseEnter={e => {
-              if (!isRemoving) {
-                e.currentTarget.style.background = '#ef4444';
-                e.currentTarget.style.color = '#fff';
-              }
-            }}
-            onMouseLeave={e => {
-              if (!isRemoving) {
-                e.currentTarget.style.background = 'none';
-                e.currentTarget.style.color = '#ef4444';
+    <div className="buyer-card buyer-row-card" style={{ ...baseCardStyle, padding: 18 }}>
+      <div className="buyer-property-row" style={{ display: 'grid', gridTemplateColumns: '132px minmax(0, 1fr) auto', gap: 18, alignItems: 'center' }}>
+        <div style={{ width: '100%', height: 100, overflow: 'hidden', borderRadius: 18, background: theme.surfaceSoft }}>
+          <PropertyThumb property={prop} />
+        </div>
+
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 24, fontWeight: 800, color: theme.text, marginBottom: 8 }}>
+            {prop.title || 'Untitled Property'}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 14 }}>
+            <PropertyMeta label="Location" value={prop.city || prop.location?.city || 'Not specified'} />
+            <PropertyMeta label="Price" value={formatPrice(prop.price)} />
+            <PropertyMeta label="Type" value={prop.type || prop.category || 'Property'} />
+          </div>
+        </div>
+
+        <div className="buyer-row-actions" style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+          <ActionButton
+            onClick={() => {
+              const targetId = prop._id || prop.id
+              if (targetId && targetId !== 'undefined') {
+                navigate(`/property/${targetId}`)
+              } else {
+                toast.warn('Property details unavailable.')
               }
             }}
           >
-            {isRemoving ? 'Removing...' : 'Remove'}
-          </button>
-        )}
+            View Property
+          </ActionButton>
+          {onUnsave ? (
+            <ActionButton onClick={handleRemoveClick} variant="danger" disabled={isRemoving}>
+              {isRemoving ? 'Removing...' : 'Remove'}
+            </ActionButton>
+          ) : null}
+        </div>
       </div>
     </div>
   )
 }
 
-/* ── ENHANCED Visit Card (with cancel) ── */
 function VisitCard({ visit, onCancel }) {
   const navigate = useNavigate()
   const [isCancelling, setIsCancelling] = useState(false)
   const visitStatus = getVisitStatus(visit)
   const visitDate = getVisitDate(visit)
-  const d = visitDate ? new Date(visitDate) : null
+  const date = visitDate ? new Date(visitDate) : null
+  const statusTone = getStatusTone(visitStatus)
 
   const handleCancel = async () => {
-    const confirm = window.confirm(`Cancel visit to "${visit.property?.title}"?`)
-    if (!confirm) return
+    const confirmCancel = window.confirm(`Cancel visit to "${visit.property?.title || 'this property'}"?`)
+    if (!confirmCancel) return
+
     setIsCancelling(true)
     try {
       await onCancel(visit._id)
-    } catch (error) {
-      // error already handled in parent
+    } catch {
+      // Parent already handles the toast message.
     } finally {
       setIsCancelling(false)
     }
   }
 
   return (
-    <div
-      style={{
-        padding: 16, background: '#ffffff', border: '1px solid rgba(124,58,237,0.08)',
-        borderRadius: 14, transition: 'all 0.2s'
-      }}
-      onMouseEnter={e => {
-        e.currentTarget.style.borderColor = 'rgba(124,58,237,0.25)';
-        e.currentTarget.style.backgroundColor = '#fcfaff';
-      }}
-      onMouseLeave={e => {
-        e.currentTarget.style.borderColor = 'rgba(124,58,237,0.08)';
-        e.currentTarget.style.backgroundColor = '#ffffff';
-      }}
-    >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: 10 }}>
-        <div style={{ fontSize: 15, fontWeight: 700, color: '#1a0a2e' }}>
-          {visit.property?.title || 'Property Visit'}
+    <div className="buyer-card" style={{ ...baseCardStyle, padding: 22 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 14, flexWrap: 'wrap' }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 24, fontWeight: 800, color: theme.text }}>
+            {visit.property?.title || 'Property Visit'}
+          </div>
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 10 }}>
+            <PropertyMeta
+              label="Date"
+              value={
+                date
+                  ? `${date.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })} at ${date.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`
+                  : 'To be confirmed'
+              }
+            />
+            <PropertyMeta label="Location" value={visit.property?.city || visit.property?.location?.city || 'Location not specified'} />
+          </div>
         </div>
-        <span style={{
-          fontSize: 11, padding: '3px 10px', borderRadius: 20,
-          background:
-            visitStatus === 'CONFIRMED' ? 'rgba(34,197,94,0.1)' :
-              visitStatus === 'CANCELLED' ? 'rgba(239,68,68,0.1)' :
-                'rgba(124,58,237,0.08)',
-          color:
-            visitStatus === 'CONFIRMED' ? '#16a34a' :
-              visitStatus === 'CANCELLED' ? '#dc2626' :
-                '#7c3aed',
-          fontWeight: 600, textTransform: 'capitalize'
-        }}>
+
+        <span style={{ padding: '8px 12px', borderRadius: 999, background: statusTone.background, color: statusTone.color, border: `1px solid ${statusTone.border}`, fontSize: 12, fontWeight: 700, letterSpacing: '0.04em' }}>
           {visitStatus}
         </span>
       </div>
-      {d && (
-        <div style={{ fontSize: 13, color: 'rgba(26,10,46,0.6)', marginBottom: 6 }}>
-          📅 {d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
-          at {d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
-        </div>
-      )}
-      <div style={{ fontSize: 13, color: 'rgba(26,10,46,0.5)', marginBottom: 12 }}>
-        📍 {visit.property?.city || visit.property?.location?.city || 'Location not specified'}
-      </div>
-      <div style={{ display: 'flex', gap: 8 }}>
-        <button 
+
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 20 }}>
+        <ActionButton
           onClick={() => {
-            const targetId = visit.property?._id || visit.property?.id;
-            if (targetId && targetId !== "undefined") {
-              navigate(`/property/${targetId}`);
+            const targetId = visit.property?._id || visit.property?.id
+            if (targetId && targetId !== 'undefined') {
+              navigate(`/property/${targetId}`)
             } else {
-              toast.warn("Property details unavailable.");
+              toast.warn('Property details unavailable.')
             }
-          }} 
-          style={{
-            padding: '6px 14px', borderRadius: 8, border: '1px solid rgba(124,58,237,0.3)',
-            background: 'none', color: '#7c3aed', fontSize: 12, fontWeight: 600, cursor: 'pointer',
-            transition: 'all 0.2s'
-          }}
-          onMouseEnter={e => {
-            e.currentTarget.style.background = '#7c3aed';
-            e.currentTarget.style.color = '#fff';
-          }}
-          onMouseLeave={e => {
-            e.currentTarget.style.background = 'none';
-            e.currentTarget.style.color = '#7c3aed';
           }}
         >
           View Property
-        </button>
-        {visitStatus !== 'CANCELLED' && (
-          <button
-            onClick={handleCancel}
-            disabled={isCancelling}
-            style={{
-              padding: '6px 14px', borderRadius: 8, border: '1px solid rgba(239,68,68,0.3)',
-              background: isCancelling ? '#fecaca' : 'none',
-              color: isCancelling ? '#b91c1c' : '#ef4444',
-              fontSize: 12, fontWeight: 600,
-              cursor: isCancelling ? 'not-allowed' : 'pointer',
-              transition: 'all 0.2s'
-            }}
-            onMouseEnter={e => {
-              if (!isCancelling) {
-                e.currentTarget.style.background = '#ef4444';
-                e.currentTarget.style.color = '#fff';
-              }
-            }}
-            onMouseLeave={e => {
-              if (!isCancelling) {
-                e.currentTarget.style.background = 'none';
-                e.currentTarget.style.color = '#ef4444';
-              }
-            }}
-          >
+        </ActionButton>
+        {String(visitStatus).toUpperCase() !== 'CANCELLED' ? (
+          <ActionButton onClick={handleCancel} variant="danger" disabled={isCancelling}>
             {isCancelling ? 'Cancelling...' : 'Cancel Visit'}
-          </button>
-        )}
+          </ActionButton>
+        ) : null}
       </div>
     </div>
   )
 }
 
-/* ── Inquiry Card ── */
 function InquiryCard({ inquiry, onOpenConversation }) {
-  return (
-    <div
-      style={{
-        padding: 16, background: '#ffffff', border: '1px solid rgba(124,58,237,0.08)',
-        borderRadius: 14, transition: 'all 0.2s'
-      }}
-      onMouseEnter={e => {
-        e.currentTarget.style.borderColor = 'rgba(124,58,237,0.25)';
-        e.currentTarget.style.backgroundColor = '#fcfaff';
-      }}
-      onMouseLeave={e => {
-        e.currentTarget.style.borderColor = 'rgba(124,58,237,0.08)';
-        e.currentTarget.style.backgroundColor = '#ffffff';
-      }}
-    >
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-        <div style={{ fontSize: 15, fontWeight: 700, color: '#1a0a2e' }}>{inquiry.property?.title || 'Property Inquiry'}</div>
-        <span style={{ fontSize: 12, color: 'rgba(26,10,46,0.4)' }}>{timeAgo(inquiry.createdAt)}</span>
-      </div>
-      <p style={{ fontSize: 13.5, color: 'rgba(26,10,46,0.7)', fontStyle: 'italic', lineHeight: 1.6, marginBottom: inquiry.response ? 12 : 0 }}>
-        "{inquiry.message}"
-      </p>
-      {inquiry.response && (
-        <div style={{ padding: '10px 14px', background: 'rgba(124,58,237,0.05)', border: '1px solid rgba(124,58,237,0.15)', borderRadius: 10, marginTop: 10 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#7c3aed', marginBottom: 5 }}>OWNER RESPONSE</div>
-          <p style={{ fontSize: 13, color: 'rgba(26,10,46,0.7)', lineHeight: 1.6 }}>{inquiry.response}</p>
-        </div>
-      )}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
-        <button
-          onClick={() => onOpenConversation?.(inquiry)}
-          style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid rgba(124,58,237,0.25)', background: 'rgba(124,58,237,0.08)', color: '#7c3aed', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
-        >
-          Open Conversation
-        </button>
-      </div>
-    </div>
-  )
-}
+  const hasResponse = Boolean(inquiry.response)
 
-/* ── Overview Tab ── */
-function Overview({ saved, visits, inquiries }) {
-  const navigate = useNavigate()
-  const validSaved = saved.filter(item => item && item.property)
   return (
-    <div>
-      <div className="stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 20, marginBottom: 32 }}>
-        <StatCard icon="❤️" label="Saved Properties" value={validSaved.length} />
-        <StatCard icon="📅" label="Scheduled Visits" value={visits.length} />
-        <StatCard icon="💬" label="Inquiries Sent" value={inquiries.length} />
-        <StatCard icon="🏠" label="Properties Viewed" value="0" />
-      </div>
-
-      {validSaved.length > 0 && (
-        <div style={{ marginBottom: 32 }}>
-          <div style={{ fontSize: 18, fontWeight: 700, color: '#1a0a2e', marginBottom: 16 }}>Recently Saved</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {validSaved.slice(0, 3).map(item => (
-              <PropRow key={item._id} prop={item.property} />
-            ))}
+    <div className="buyer-card" style={{ ...baseCardStyle, padding: 22 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap' }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 24, fontWeight: 800, color: theme.text }}>
+            {inquiry.property?.title || 'Property Inquiry'}
           </div>
-          {validSaved.length > 3 && (
-            <button onClick={() => { }} style={{ marginTop: 12, fontSize: 13, color: '#7c3aed', background: 'none', border: 'none', cursor: 'pointer' }}>
-              View all {validSaved.length} →
-            </button>
-          )}
+          <div style={{ fontSize: 13, color: theme.primary, fontWeight: 700, marginTop: 8 }}>Sent by: {inquiry.user?.name || 'You'}</div>
         </div>
-      )}
+        <div style={{ fontSize: 13, color: theme.textMute }}>{timeAgo(inquiry.createdAt)}</div>
+      </div>
 
-      <div style={{ textAlign: 'center', padding: '40px 20px', background: '#f9f9ff', borderRadius: 20, border: '1px solid rgba(124,58,237,0.1)' }}>
-        <div style={{ fontSize: 44, marginBottom: 12 }}>🔍</div>
-        <h3 style={{ fontFamily: "'Playfair Display',serif", fontSize: 22, fontWeight: 800, color: '#1a0a2e', marginBottom: 8 }}>
-          Find Your Dream Home
-        </h3>
-        <p style={{ color: 'rgba(26,10,46,0.5)', fontSize: 14, marginBottom: 20 }}>Browse thousands of verified properties</p>
-        <button onClick={() => navigate('/properties')} style={{ padding: '12px 32px', background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', border: 'none', borderRadius: 40, color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s' }}
-          onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
-          onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}>
-          Browse Properties
-        </button>
+      <div style={{ marginTop: 16, padding: 16, borderRadius: 18, background: theme.surfaceSoft, color: theme.textSoft, lineHeight: 1.7 }}>
+        "{inquiry.message}"
+      </div>
+
+      {hasResponse ? (
+        <div style={{ marginTop: 14, padding: 16, borderRadius: 18, background: 'rgba(109, 40, 217, 0.08)', border: `1px solid ${theme.border}` }}>
+          <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.10em', color: theme.primary, fontWeight: 800, marginBottom: 6 }}>Owner Response</div>
+          <div style={{ color: theme.textSoft, lineHeight: 1.7 }}>{inquiry.response}</div>
+        </div>
+      ) : null}
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 18 }}>
+        <ActionButton onClick={() => onOpenConversation?.(inquiry)}>Open Conversation</ActionButton>
       </div>
     </div>
   )
 }
 
-/* ── Empty State ── */
-function EmptyState({ icon, title, sub, btn, to }) {
+function EmptyState({ title, sub, btn, to, onClick }) {
   const navigate = useNavigate()
+
   return (
-    <div style={{ textAlign: 'center', padding: '60px 20px', background: '#fff', borderRadius: 20, border: '1px solid rgba(124,58,237,0.08)' }}>
-      <div style={{ fontSize: 48, marginBottom: 16, opacity: 0.6 }}>{icon}</div>
-      <h3 style={{ fontFamily: "'Playfair Display',serif", fontSize: 20, fontWeight: 800, color: '#1a0a2e', marginBottom: 8 }}>
-        {title}
-      </h3>
-      <p style={{ color: 'rgba(26,10,46,0.5)', fontSize: 14, marginBottom: 20 }}>{sub}</p>
-      <button onClick={() => navigate(to)} style={{ padding: '10px 24px', background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', border: 'none', borderRadius: 40, color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s' }}
-        onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
-        onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}>
-        {btn}
-      </button>
+    <DashboardShell>
+      <div style={{ textAlign: 'center', padding: '28px 12px' }}>
+        <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 30, fontWeight: 800, color: theme.text, marginBottom: 10 }}>{title}</div>
+        <div style={{ fontSize: 15, color: theme.textSoft, maxWidth: 430, margin: '0 auto 22px' }}>{sub}</div>
+        <ActionButton onClick={onClick || (() => navigate(to))} variant="primary">{btn}</ActionButton>
+      </div>
+    </DashboardShell>
+  )
+}
+
+function Overview({ saved, visits, inquiries, onOpenSavedTab }) {
+  const navigate = useNavigate()
+  const validSaved = saved.filter((item) => item && item.property)
+  const upcomingVisitCount = visits.filter((visit) => String(getVisitStatus(visit)).toUpperCase() !== 'CANCELLED').length
+  const respondedInquiryCount = inquiries.filter((inquiry) => Boolean(inquiry?.response)).length
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 26 }}>
+      <div className="buyer-stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 18 }}>
+        <StatCard eyebrow="Saved" label="Properties bookmarked for later" value={validSaved.length} tone={{ background: '#fff7ed', orb: 'rgba(251, 146, 60, 0.16)' }} />
+        <StatCard eyebrow="Visits" label="Scheduled and active property visits" value={upcomingVisitCount} tone={{ background: '#eefcf5', orb: 'rgba(16, 185, 129, 0.16)' }} />
+        <StatCard eyebrow="Inquiries" label="Conversations started with owners" value={inquiries.length} tone={{ background: '#f5f3ff', orb: 'rgba(109, 40, 217, 0.16)' }} />
+        <StatCard eyebrow="Responses" label="Owner replies received so far" value={respondedInquiryCount} tone={{ background: '#eff6ff', orb: 'rgba(59, 130, 246, 0.16)' }} />
+      </div>
+
+      {validSaved.length > 0 ? (
+        <DashboardShell>
+          <SectionHeading title="Recently Saved" sub="A quick look at the properties you marked for later." action={validSaved.length > 3 ? <ActionButton onClick={onOpenSavedTab}>View All Saved</ActionButton> : null} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {validSaved.slice(0, 3).map((item) => <PropRow key={item._id} prop={item.property} />)}
+          </div>
+        </DashboardShell>
+      ) : null}
+
+      <div style={{ ...baseCardStyle, padding: 32, background: 'linear-gradient(135deg, #ffffff 0%, #f3edff 55%, #efe8ff 100%)', position: 'relative', overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', top: -55, right: -30, width: 180, height: 180, borderRadius: '50%', background: 'rgba(109, 40, 217, 0.12)' }} />
+        <div style={{ position: 'relative', maxWidth: 560 }}>
+          <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: theme.primary, marginBottom: 12 }}>Start Exploring</div>
+          <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 34, fontWeight: 800, color: theme.text, lineHeight: 1.2 }}>Find the next place that feels right.</div>
+          <div style={{ fontSize: 15, color: theme.textSoft, lineHeight: 1.8, marginTop: 12 }}>
+            Browse verified listings, compare options, schedule visits, and keep every inquiry organized from one place.
+          </div>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 22 }}>
+            <ActionButton onClick={() => navigate('/properties')} variant="primary">Browse Properties</ActionButton>
+            <ActionButton onClick={onOpenSavedTab}>Review Saved List</ActionButton>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
 
-/* ── Main Dashboard ── */
 export default function BuyerDashboard() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
@@ -446,6 +393,7 @@ export default function BuyerDashboard() {
 
   const fetchData = useCallback(async () => {
     if (!user) return
+
     setLoading(true)
     try {
       const [savedRes, visitsRes, inquiriesRes] = await Promise.allSettled([
@@ -455,9 +403,8 @@ export default function BuyerDashboard() {
       ])
 
       if (savedRes.status === 'fulfilled') {
-        let favs = savedRes.value?.data || savedRes.value || []
-        const validFavs = Array.isArray(favs) ? favs.filter(fav => fav && fav.property) : []
-        setSaved(validFavs)
+        const favorites = savedRes.value?.data || savedRes.value || []
+        setSaved(Array.isArray(favorites) ? favorites.filter((favorite) => favorite && favorite.property) : [])
       } else {
         console.error('Failed to fetch saved properties:', savedRes.reason)
         setSaved([])
@@ -562,10 +509,11 @@ export default function BuyerDashboard() {
     }
 
     let error = null
+
     if (cleanFavId) {
       try {
         await userService.unsave(cleanFavId)
-        setSaved(prev => prev.filter(fav => fav._id !== favoriteId))
+        setSaved((prev) => prev.filter((fav) => fav._id !== favoriteId))
         toast.success('Property removed from saved')
         return
       } catch (err) {
@@ -577,186 +525,204 @@ export default function BuyerDashboard() {
     if (cleanPropId) {
       try {
         await userService.unsave(cleanPropId)
-        setSaved(prev => prev.filter(fav => fav.property?._id !== propertyId))
+        setSaved((prev) => prev.filter((fav) => fav.property?._id !== propertyId))
         toast.success('Property removed from saved')
         return
-      } catch (err2) {
-        console.error('Unsave with cleaned propertyId failed:', err2)
-        error = err2
+      } catch (err) {
+        error = err
+        console.error('Unsave with cleaned propertyId failed:', err)
       }
     }
 
-    const msg = error?.response?.data?.message || error?.message || 'Failed to remove property'
-    toast.error(msg)
+    const message = error?.response?.data?.message || error?.message || 'Failed to remove property'
+    toast.error(message)
   }
 
-  // 🆕 Cancel visit
   const handleCancelVisit = async (visitId) => {
     try {
       await visitService.updateStatus(visitId, 'CANCELLED')
-      setVisits(prev => prev.map(v => v._id === visitId ? { ...v, status: 'CANCELLED', visit_status: 'CANCELLED' } : v))
+      setVisits((prev) => prev.map((visit) => visit._id === visitId ? { ...visit, status: 'CANCELLED', visit_status: 'CANCELLED' } : visit))
       toast.success('Visit cancelled successfully')
     } catch (error) {
       console.error('Cancel visit error:', error)
-      toast.error(error?.response?.data?.message || 'Failed to cancel visit')
-      throw error
+      toast.error('Failed to cancel visit')
     }
   }
 
-  const tabContent = [
-    <Overview key="overview" saved={saved} visits={visits} inquiries={inquiries} />,
-    <div key="saved" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      {saved.length === 0 ? (
-        <EmptyState icon="❤️" title="No saved properties" sub="Save properties to view them here" btn="Browse Properties" to="/properties" />
-      ) : (
-        saved.map(fav => (
-          <PropRow
-            key={fav._id}
-            prop={fav.property}
-            favoriteId={fav._id}
-            propertyId={fav.property?._id}
-            onUnsave={handleUnsave}
-          />
-        ))
-      )}
-    </div>,
-    <div key="visits" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        <div style={{ fontSize: 15, fontWeight: 700, color: '#1a0a2e' }}>Scheduled Visits ({visits.length})</div>
-        <button
-          onClick={() => navigate('/properties')}
-          style={{ padding: '9px 18px', background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', border: 'none', borderRadius: 40, color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
-        >
-          + Schedule Visit
-        </button>
-      </div>
-      {visits.length === 0 ? (
-        <EmptyState icon="📅" title="No visits scheduled" sub="Schedule property visits to track them here" btn="Browse Properties" to="/properties" />
-      ) : (
-        visits.map(visit => (
-          <VisitCard
-            key={visit._id}
-            visit={visit}
-            onCancel={handleCancelVisit}
-          />
-        ))
-      )}
-    </div>,
-    <div key="inquiries" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <input
-        type="text"
-        value={inquirySearch}
-        onChange={(event) => setInquirySearch(event.target.value)}
-        placeholder="Search by property name..."
-        style={{ width: '100%', maxWidth: 320, height: 36, borderRadius: 10, border: '1px solid rgba(124,58,237,0.2)', background: '#faf8ff', color: '#1a0a2e', padding: '0 12px', fontSize: 13, marginBottom: 4, outline: 'none' }}
-      />
-      {inquiries.length === 0 ? (
-        <EmptyState icon="💬" title="No inquiries yet" sub="Contact property owners to see inquiries here" btn="Browse Properties" to="/properties" />
-      ) : (
-        inquiries
-          .slice()
-          .sort((a, b) => new Date(b?.createdAt || 0) - new Date(a?.createdAt || 0))
-          .filter((inq) => {
-            const keyword = inquirySearch.trim().toLowerCase()
-            if (!keyword) return true
-            return String(inq?.property?.title || '').toLowerCase().includes(keyword)
-          })
-          .map(inq => <InquiryCard key={inq._id} inquiry={inq} onOpenConversation={setActiveInquiry} />)
-      )}
-    </div>,
-  ]
+  const filteredInquiries = inquiries
+    .slice()
+    .sort((a, b) => new Date(b?.createdAt || 0) - new Date(a?.createdAt || 0))
+    .filter((inquiry) => {
+      const keyword = inquirySearch.trim().toLowerCase()
+      if (!keyword) return true
+      return String(inquiry?.property?.title || '').toLowerCase().includes(keyword)
+    })
 
   const firstName = user?.name?.split(' ')[0] || user?.username?.split(' ')[0] || 'there'
   const profileImageSrc = resolveApiAssetUrl(user?.profileImage || user?.profile_image || user?.avatar || user?.image || '')
 
+  const tabContent = [
+    <Overview key="overview" saved={saved} visits={visits} inquiries={inquiries} onOpenSavedTab={() => setTab(1)} />,
+    <div key="saved" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <SectionHeading title="Saved Properties" sub={`You have ${saved.length} saved ${saved.length === 1 ? 'property' : 'properties'} ready to revisit.`} />
+      {saved.length === 0 ? (
+        <EmptyState title="No saved properties yet" sub="As you explore listings, save the ones you like and they will appear here." btn="Browse Properties" to="/properties" />
+      ) : (
+        saved.map((favorite) => (
+          <PropRow key={favorite._id} prop={favorite.property} favoriteId={favorite._id} propertyId={favorite.property?._id} onUnsave={handleUnsave} />
+        ))
+      )}
+    </div>,
+    <div key="visits" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <SectionHeading
+        title="Scheduled Visits"
+        sub="Track every booking, check statuses, and update plans from one place."
+        action={<ActionButton onClick={() => navigate('/properties')} variant="primary">Schedule Visit</ActionButton>}
+      />
+      {visits.length === 0 ? (
+        <EmptyState title="No visits scheduled" sub="Book a property visit to start seeing confirmations, updates, and visit history here." btn="Browse Properties" to="/properties" />
+      ) : (
+        visits.map((visit) => <VisitCard key={visit._id} visit={visit} onCancel={handleCancelVisit} />)
+      )}
+    </div>,
+    <div key="inquiries" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <SectionHeading title="My Inquiries" sub="Review the questions you sent to property owners and continue the conversation." />
+      <div style={{ ...baseCardStyle, padding: 18, boxShadow: 'none' }}>
+        <input
+          type="text"
+          value={inquirySearch}
+          onChange={(event) => setInquirySearch(event.target.value)}
+          placeholder="Search by property name..."
+          style={{ width: '100%', height: 50, borderRadius: 16, border: `1px solid ${theme.borderStrong}`, background: theme.surfaceSoft, color: theme.text, padding: '0 16px', fontSize: 14, outline: 'none' }}
+        />
+      </div>
+
+      {inquiries.length === 0 ? (
+        <EmptyState title="No inquiries yet" sub="Send a question to a property owner and it will show up here together with any replies." btn="Browse Properties" to="/properties" />
+      ) : filteredInquiries.length === 0 ? (
+        <EmptyState title="No matching inquiries" sub="Try a different property name or clear the search to see all conversations." btn="Clear Search" onClick={() => setInquirySearch('')} />
+      ) : (
+        filteredInquiries.map((inquiry) => <InquiryCard key={inquiry._id} inquiry={inquiry} onOpenConversation={setActiveInquiry} />)
+      )}
+    </div>,
+  ]
+
   return (
-    <div style={{ minHeight: '100vh', background: '#f8f7ff', fontFamily: "'DM Sans',sans-serif", color: '#1a0a2e' }}>
+    <div style={{ minHeight: '100vh', background: `radial-gradient(circle at top left, rgba(196, 181, 253, 0.35), transparent 24%), ${theme.bg}`, fontFamily: "'DM Sans', sans-serif", color: theme.text }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@700;800&display=swap');
-        *{box-sizing:border-box;}
-        @media(max-width:768px){.db-header-row{flex-direction:column!important;gap:16px!important;}}
-        @media(max-width:600px){.prop-row-grid{grid-template-columns:1fr !important; gap:12px !important;}}
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Playfair+Display:wght@700;800&display=swap');
+        * { box-sizing: border-box; }
+        .buyer-card {
+          transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+        }
+        .buyer-card:hover {
+          transform: translateY(-3px);
+          box-shadow: 0 22px 50px rgba(76, 29, 149, 0.14);
+          border-color: rgba(109, 40, 217, 0.18);
+        }
+        .buyer-tab-scroll::-webkit-scrollbar {
+          display: none;
+        }
+        @media (max-width: 980px) {
+          .buyer-stat-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+          }
+          .buyer-property-row {
+            grid-template-columns: 1fr !important;
+          }
+        }
+        @media (max-width: 720px) {
+          .buyer-header-row {
+            flex-direction: column !important;
+            align-items: stretch !important;
+          }
+          .buyer-header-actions {
+            justify-content: stretch !important;
+          }
+          .buyer-header-actions > * {
+            flex: 1 1 auto;
+          }
+          .buyer-stat-grid {
+            grid-template-columns: 1fr !important;
+          }
+          .buyer-row-actions {
+            justify-content: stretch !important;
+          }
+          .buyer-row-actions button {
+            flex: 1 1 auto;
+          }
+        }
       `}</style>
 
-      {/* Header */}
-      <div style={{ background: '#ffffff', backdropFilter: 'blur(20px)', borderBottom: '1px solid rgba(124,58,237,0.1)', padding: '20px 6vw', position: 'sticky', top: 0, zIndex: 10 }}>
-        <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-          <div className="db-header-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 16 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-              <div style={{ width: 56, height: 56, borderRadius: '50%', overflow: 'hidden', background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, fontWeight: 800, color: '#fff', boxShadow: '0 6px 20px rgba(124,58,237,0.25)' }}>
+      <div style={{ position: 'sticky', top: 0, zIndex: 20, backdropFilter: 'blur(18px)', background: 'rgba(245, 243, 255, 0.88)', borderBottom: `1px solid ${theme.border}` }}>
+        <div style={{ maxWidth: 1180, margin: '0 auto', padding: '24px 24px 20px' }}>
+          <div className="buyer-header-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 18, minWidth: 0 }}>
+              <div style={{ width: 68, height: 68, borderRadius: 24, overflow: 'hidden', background: `linear-gradient(135deg, ${theme.primary}, ${theme.primaryDeep})`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ffffff', fontWeight: 800, fontSize: 22, boxShadow: '0 16px 34px rgba(109, 40, 217, 0.22)' }}>
                 {profileImageSrc ? (
-                  <img src={profileImageSrc} alt={user?.name || 'Profile'} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
+                  <img src={profileImageSrc} alt={user?.name || 'Profile'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 ) : (
                   getInitials(user?.name || user?.username || 'U')
                 )}
               </div>
-              <div>
-                <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 22, fontWeight: 800, color: '#1a0a2e' }}>Welcome back, {firstName}!</div>
-                <div style={{ fontSize: 13, color: 'rgba(26,10,46,0.5)', marginTop: 2 }}>{user?.email}</div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 34, fontWeight: 800, color: theme.text, lineHeight: 1.1 }}>
+                  Welcome back, {firstName}!
+                </div>
+                <div style={{ fontSize: 15, color: theme.textSoft, marginTop: 6, overflow: 'hidden', textOverflow: 'ellipsis' }}>{user?.email}</div>
               </div>
             </div>
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-              <button
-                onClick={() => navigate('/')}
-                style={{ padding: '10px 20px', background: '#ffffff', border: '1px solid rgba(124,58,237,0.22)', borderRadius: 40, color: '#7c3aed', fontSize: 14, fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s' }}
-                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(124,58,237,0.08)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
-                onMouseLeave={e => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.transform = 'translateY(0)'; }}
-              >
-                ← Back to Website
-              </button>
+
+            <div className="buyer-header-actions" style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              <ActionButton onClick={() => navigate('/')}>Back to Website</ActionButton>
               <NotificationBell user={user} />
-              <button onClick={() => navigate('/properties')} style={{ padding: '10px 20px', background: 'rgba(124,58,237,0.08)', border: '1px solid rgba(124,58,237,0.2)', borderRadius: 40, color: '#7c3aed', fontSize: 14, fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s' }}
-                onMouseEnter={e => { e.currentTarget.style.background = '#7c3aed'; e.currentTarget.style.color = '#fff'; }}
-                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(124,58,237,0.08)'; e.currentTarget.style.color = '#7c3aed'; }}>
-                Browse Properties
-              </button>
-              <button onClick={() => { logout(); navigate('/') }} style={{ padding: '10px 20px', background: 'rgba(124,58,237,0.08)', border: '1px solid rgba(124,58,237,0.2)', borderRadius: 40, color: '#7c3aed', fontSize: 14, fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s' }}
-                onMouseEnter={e => { e.currentTarget.style.background = '#ef4444'; e.currentTarget.style.color = '#fff'; }}
-                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(124,58,237,0.08)'; e.currentTarget.style.color = '#7c3aed'; }}>
-                Logout
-              </button>
+              <ActionButton onClick={() => navigate('/properties')} variant="primary">Browse Properties</ActionButton>
+              <ActionButton onClick={() => { logout(); navigate('/') }} variant="danger">Logout</ActionButton>
             </div>
           </div>
 
-          {/* Tabs */}
-          <div style={{ display: 'flex', gap: 6, overflowX: 'auto', scrollbarWidth: 'none' }}>
-            {TABS.map((t, i) => (
-              <button key={t} onClick={() => setTab(i)} style={{
-                padding: '10px 22px', borderRadius: 40, border: 'none', fontSize: 14, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: "'DM Sans',sans-serif", transition: 'all 0.2s',
-                background: tab === i ? 'linear-gradient(135deg,#7c3aed,#6d28d9)' : 'rgba(124,58,237,0.08)',
-                color: tab === i ? '#fff' : '#7c3aed',
-              }}
-                onMouseEnter={e => { if (tab !== i) e.currentTarget.style.background = 'rgba(124,58,237,0.15)'; }}
-                onMouseLeave={e => { if (tab !== i) e.currentTarget.style.background = 'rgba(124,58,237,0.08)'; }}>
-                {t}
-                {i === 0 && saved.length > 0 && (
-                  <span style={{ marginLeft: 6, background: tab === i ? '#fff' : '#7c3aed', color: tab === i ? '#7c3aed' : '#fff', borderRadius: 20, padding: '0 6px', fontSize: 11 }}>
-                    {saved.length}
+          <div className="buyer-tab-scroll" style={{ display: 'flex', gap: 10, overflowX: 'auto', scrollbarWidth: 'none', marginTop: 22, paddingBottom: 2 }}>
+            {TABS.map((label, index) => {
+              const isActive = tab === index
+              const badgeValue = index === 0 ? saved.length : index === 1 ? saved.length : index === 2 ? visits.length : inquiries.length
+
+              return (
+                <button
+                  key={label}
+                  onClick={() => setTab(index)}
+                  style={{ ...actionButtonBase, display: 'inline-flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap', borderRadius: 999, padding: '12px 18px', background: isActive ? `linear-gradient(135deg, ${theme.primary}, ${theme.primaryDeep})` : theme.surface, color: isActive ? '#ffffff' : theme.primary, border: isActive ? 'none' : `1px solid ${theme.borderStrong}`, boxShadow: isActive ? '0 14px 28px rgba(109, 40, 217, 0.18)' : 'none' }}
+                >
+                  <span>{label}</span>
+                  <span style={{ minWidth: 24, height: 24, borderRadius: 999, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, background: isActive ? 'rgba(255, 255, 255, 0.16)' : theme.primarySoft, color: isActive ? '#ffffff' : theme.primary }}>
+                    {badgeValue}
                   </span>
-                )}
-              </button>
-            ))}
+                </button>
+              )
+            })}
           </div>
         </div>
       </div>
 
-      {/* Content */}
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '32px 6vw 64px' }}>
+      <div style={{ maxWidth: 1180, margin: '0 auto', padding: '28px 24px 72px' }}>
         {loading ? (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(180px,1fr))', gap: 20 }}>
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} style={{ height: 120, background: '#f0eeff', borderRadius: 16, animation: 'pulse 1.5s infinite' }} />
+          <div className="buyer-stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 18 }}>
+            {Array.from({ length: 4 }).map((_, index) => (
+              <div key={index} style={{ height: 150, borderRadius: 24, background: 'linear-gradient(90deg, rgba(255,255,255,0.7), rgba(243,237,255,0.95), rgba(255,255,255,0.7))', backgroundSize: '200% 100%', animation: 'buyerShimmer 1.4s linear infinite', border: `1px solid ${theme.border}` }} />
             ))}
           </div>
         ) : (
           tabContent[tab]
         )}
       </div>
-      {activeInquiry && (
-        <ThreadPanel inquiry={activeInquiry} user={user} onClose={() => setActiveInquiry(null)} />
-      )}
-      <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.6}}`}</style>
+
+      {activeInquiry ? <ThreadPanel inquiry={activeInquiry} user={user} onClose={() => setActiveInquiry(null)} /> : null}
+
+      <style>{`
+        @keyframes buyerShimmer {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+      `}</style>
     </div>
   )
 }
-

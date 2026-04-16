@@ -327,6 +327,13 @@
         return name.includes(keyword)
       })
 
+    const heroStats = [
+      { label: 'Total Tickets', value: tickets.length },
+      { label: 'Open', value: openCount },
+      { label: 'In Progress', value: inProgCount },
+      { label: 'Resolved', value: resolvedCount },
+    ]
+
     const tabContent = [
       /* ── TICKETS TAB ── */
       <div>
@@ -385,14 +392,44 @@
     ]
 
     return (
-      <div style={{ background: '#f8f7ff', minHeight: '100vh', fontFamily: "'DM Sans',sans-serif" }}>
+      <div className="support-shell" style={{ background: 'linear-gradient(180deg, #f6fbff 0%, #f8f7ff 26%, #ffffff 100%)', minHeight: '100vh', fontFamily: "'DM Sans',sans-serif", position: 'relative', overflow: 'hidden' }}>
+        <style>{`
+          @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@700;800&display=swap');
+          *{box-sizing:border-box;}
+          .support-shell::before {
+            content: '';
+            position: absolute;
+            inset: 0 0 auto;
+            height: 320px;
+            background:
+              radial-gradient(circle at top left, rgba(6,182,212,0.18), transparent 34%),
+              radial-gradient(circle at top right, rgba(124,58,237,0.16), transparent 40%);
+            pointer-events: none;
+          }
+          .support-hero-stats {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 12px;
+            margin-top: 18px;
+          }
+          @media (max-width: 768px) {
+            .support-hero-stats {
+              grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+          }
+          @media (max-width: 480px) {
+            .support-hero-stats {
+              grid-template-columns: 1fr;
+            }
+          }
+        `}</style>
 
         {/* ── HEADER ── */}
         <div style={{
-          background: '#fff',
+          background: 'linear-gradient(135deg, rgba(255,255,255,0.97), rgba(240,249,255,0.95))',
           borderBottom: '1px solid rgba(124,58,237,0.1)',
-          padding: '20px 6vw 0',
-          boxShadow: '0 2px 12px rgba(124,58,237,0.06)',
+          padding: '20px 6vw 24px',
+          boxShadow: '0 20px 60px rgba(6,182,212,0.08)',
         }}>
           <div style={{ maxWidth: 1100, margin: '0 auto' }}>
 
@@ -484,12 +521,12 @@
             </div>
 
             {/* Tabs */}
-            <div style={{ display: 'flex', gap: 2 }}>
+            <div style={{ display: 'flex', gap: 8, overflowX: 'auto', scrollbarWidth: 'none' }}>
               {TABS.map((t, i) => (
                 <button key={t} onClick={() => setTab(i)}
                   style={{
                     padding: '10px 22px',
-                    borderRadius: '9px 9px 0 0',
+                    borderRadius: 999,
                     border: 'none',
                     fontSize: 14,
                     fontWeight: 600,
@@ -497,9 +534,8 @@
                     whiteSpace: 'nowrap',
                     fontFamily: "'DM Sans',sans-serif",
                     transition: 'all .2s',
-                    background:     tab === i ? '#f8f7ff' : 'none',
-                    color:          tab === i ? '#7c3aed' : 'rgba(26,10,46,0.45)',
-                    borderBottom:   tab === i ? '2px solid #7c3aed' : '2px solid transparent',
+                    background: tab === i ? 'linear-gradient(135deg,#7c3aed,#6d28d9)' : 'rgba(124,58,237,0.08)',
+                    color: tab === i ? '#fff' : '#7c3aed',
                   }}>
                   {t}
                   {/* Badge count */}
@@ -514,6 +550,14 @@
                     </span>
                   )}
                 </button>
+              ))}
+            </div>
+            <div className="support-hero-stats">
+              {heroStats.map((item) => (
+                <div key={item.label} style={{ padding: '16px 18px', borderRadius: 20, background: 'rgba(255,255,255,0.86)', border: '1px solid rgba(6,182,212,0.14)' }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', color: 'rgba(26,10,46,0.45)', textTransform: 'uppercase' }}>{item.label}</div>
+                  <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 24, fontWeight: 800, color: '#1a0a2e', marginTop: 10 }}>{item.value}</div>
+                </div>
               ))}
             </div>
           </div>

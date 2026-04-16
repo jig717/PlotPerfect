@@ -813,11 +813,34 @@ export default function OwnerDashboard() {
     </div>,
   ]
 
+  const heroStats = [
+    { label: 'Live Listings', value: stats.activeListings || 0 },
+    { label: 'Buyer Leads', value: stats.totalInquiries || 0 },
+    { label: 'Profile Views', value: stats.totalViews || 0 },
+    { label: 'Payments', value: payments.length || 0 },
+  ]
+
   return (
-    <div style={{ minHeight: '100vh', background: '#f8f7ff', fontFamily: "'DM Sans',sans-serif", color: '#1a0a2e' }}>
+    <div className="owner-shell" style={{ minHeight: '100vh', background: 'linear-gradient(180deg, #fdf8f5 0%, #f8f7ff 26%, #ffffff 100%)', fontFamily: "'DM Sans',sans-serif", color: '#1a0a2e', position: 'relative', overflow: 'hidden' }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@700;800&display=swap');
         *{box-sizing:border-box;}
+        .owner-shell::before {
+          content: '';
+          position: absolute;
+          inset: 0 0 auto;
+          height: 320px;
+          background:
+            radial-gradient(circle at top left, rgba(249,115,22,0.14), transparent 34%),
+            radial-gradient(circle at top right, rgba(124,58,237,0.18), transparent 38%);
+          pointer-events: none;
+        }
+        .owner-hero-stats {
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 12px;
+          margin-top: 18px;
+        }
         
         /* Responsive adjustments */
         @media (max-width: 768px) {
@@ -844,6 +867,9 @@ export default function OwnerDashboard() {
           .stat-cards {
             grid-template-columns: 1fr !important;
           }
+          .owner-hero-stats {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+          }
           .charts-row {
             grid-template-columns: 1fr !important;
             gap: 16px !important;
@@ -854,6 +880,9 @@ export default function OwnerDashboard() {
         }
         
         @media (max-width: 480px) {
+          .owner-hero-stats {
+            grid-template-columns: 1fr !important;
+          }
           .property-row {
             grid-template-columns: 60px 1fr !important;
             gap: 8px !important;
@@ -881,7 +910,7 @@ export default function OwnerDashboard() {
         }
       `}</style>
 
-      <div style={{ background: '#ffffff', backdropFilter: 'blur(20px)', borderBottom: '1px solid rgba(124,58,237,0.1)', padding: '20px 6vw', position: 'sticky', top: 0, zIndex: 10 }}>
+      <div style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.97), rgba(255,247,237,0.94))', backdropFilter: 'blur(20px)', borderBottom: '1px solid rgba(124,58,237,0.1)', padding: '20px 6vw 24px', position: 'sticky', top: 0, zIndex: 10, boxShadow: '0 20px 60px rgba(91,33,182,0.08)' }}>
         <div style={{ maxWidth: 1100, margin: '0 auto' }}>
           <div className="owner-header-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 16 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -985,6 +1014,14 @@ export default function OwnerDashboard() {
                   </span>
                 )}
               </button>
+            ))}
+          </div>
+          <div className="owner-hero-stats">
+            {heroStats.map((item) => (
+              <div key={item.label} style={{ padding: '16px 18px', borderRadius: 20, background: 'rgba(255,255,255,0.86)', border: '1px solid rgba(249,115,22,0.14)' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', color: 'rgba(26,10,46,0.45)', textTransform: 'uppercase' }}>{item.label}</div>
+                <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 24, fontWeight: 800, color: '#1a0a2e', marginTop: 10 }}>{item.value}</div>
+              </div>
             ))}
           </div>
         </div>

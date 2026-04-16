@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { userService, propertyService, inquiryService, paymentService } from '../../services'
@@ -226,14 +226,7 @@ function StatCard({ icon, label, value, change }) {
         }}>
           {icon}
         </div>
-        {change && (
-          <span style={{ 
-            fontSize: 12, fontWeight: 600, padding: '4px 8px', borderRadius: 20, 
-            background: 'rgba(34,197,94,0.1)', color: '#16a34a' 
-          }}>
-            {change}
-          </span>
-        )}
+        
       </div>
       <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 32, fontWeight: 800, color: '#1a0a2e', lineHeight: 1.2 }}>
         {value}
@@ -293,11 +286,7 @@ function EditUserModal({ user, onClose, onSave, saving }) {
 function UserRow({ user, onDelete, onEdit }) {
   return (
     <div 
-      style={{ 
-        display: 'grid', gridTemplateColumns: '48px 1fr 120px 100px', gap: 16, 
-        padding: '14px 20px', background: '#ffffff', border: '1px solid rgba(124,58,237,0.08)', 
-        borderRadius: 14, alignItems: 'center', transition: 'all 0.2s'
-      }}
+      className="list-row user-row"
       onMouseEnter={e => {
         e.currentTarget.style.borderColor = 'rgba(124,58,237,0.25)';
         e.currentTarget.style.backgroundColor = '#fcfaff';
@@ -374,11 +363,7 @@ function PropertyRow({ prop, onDelete }) {
   const navigate = useNavigate()
   return (
     <div 
-      style={{ 
-        display: 'grid', gridTemplateColumns: '80px 1fr 120px 120px', gap: 16, 
-        padding: '14px 20px', background: '#ffffff', border: '1px solid rgba(124,58,237,0.08)', 
-        borderRadius: 14, alignItems: 'center', transition: 'all 0.2s'
-      }}
+      className="list-row prop-row"
       onMouseEnter={e => {
         e.currentTarget.style.borderColor = 'rgba(124,58,237,0.25)';
         e.currentTarget.style.backgroundColor = '#fcfaff';
@@ -560,10 +545,10 @@ export default function AdminDashboard() {
     // Overview (unchanged)
     <div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(240px,1fr))', gap: 20, marginBottom: 32 }}>
-        <StatCard icon="US" label="Total Users" value={stats.totalUsers} change="+12%" />
-        <StatCard icon="PR" label="Properties" value={stats.totalProperties} change="+8%" />
-        <StatCard icon="IN" label="Inquiries" value={stats.totalInquiries} change="+5%" />
-        <StatCard icon="PM" label="Revenue" value={formatPrice(stats.totalRevenue || 0)} change={`${stats.totalPayments || 0} payments`} />
+        <StatCard icon="US" label="Total Users" value={stats.totalUsers} />
+        <StatCard icon="PR" label="Properties" value={stats.totalProperties} />
+        <StatCard icon="IN" label="Inquiries" value={stats.totalInquiries} />
+        <StatCard icon="PM" label="Revenue" value={formatPrice(stats.totalRevenue || 0)} />
       </div>
     </div>,
 
@@ -709,15 +694,33 @@ export default function AdminDashboard() {
     </div>,
   ]
 
+  const heroStats = [
+    { label: 'Users', value: stats.totalUsers || 0 },
+    { label: 'Properties', value: stats.totalProperties || 0 },
+    { label: 'Inquiries', value: stats.totalInquiries || 0 },
+    { label: 'Revenue', value: formatPrice(stats.totalRevenue || 0) },
+  ]
+
   return (
-    <div style={{ minHeight: '100vh', background: '#f8f7ff', fontFamily: "'DM Sans',sans-serif", color: '#1a0a2e' }}>
+    <div className="admin-shell" style={{ minHeight: '100vh', background: 'linear-gradient(180deg, #f5f8ff 0%, #f8f7ff 28%, #ffffff 100%)', fontFamily: "'DM Sans',sans-serif", color: '#1a0a2e', position: 'relative', overflow: 'hidden' }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@700;800&display=swap');
         *{box-sizing:border-box;}
-        @media(max-width:768px){.admin-header-row{flex-direction:column!important;gap:16px!important;}}
+        .admin-shell::before{content:'';position:absolute;inset:0 0 auto;height:320px;background:radial-gradient(circle at top left, rgba(14,165,233,0.14), transparent 36%),radial-gradient(circle at top right, rgba(124,58,237,0.18), transparent 40%);pointer-events:none;}
+        .admin-hero-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:18px;}
+        .list-row { display: grid; gap: 16px; padding: 14px 20px; background: #ffffff; border: 1px solid rgba(124,58,237,0.08); border-radius: 14px; align-items: center; transition: all 0.2s; }
+        .user-row { grid-template-columns: 48px 1fr 120px 100px; }
+        .prop-row { grid-template-columns: 80px 1fr 120px 120px; }
+        @media(max-width:900px){.admin-hero-stats{grid-template-columns:repeat(2,minmax(0,1fr));}}
+        @media(max-width:768px){
+          .admin-header-row{flex-direction:column!important;gap:16px!important;}
+          .admin-hero-stats{grid-template-columns:1fr;}
+          .user-row, .prop-row { grid-template-columns: 1fr; gap: 12px; text-align: center; justify-items: center; }
+          .payment-list-item{flex-direction:column; text-align:center; align-items:center;}
+        }
       `}</style>
 
-      <div style={{ background: '#ffffff', backdropFilter: 'blur(20px)', borderBottom: '1px solid rgba(124,58,237,0.1)', padding: '20px 6vw', position: 'sticky', top: 0, zIndex: 10 }}>
+      <div style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.96), rgba(248,247,255,0.96))', backdropFilter: 'blur(20px)', borderBottom: '1px solid rgba(124,58,237,0.1)', padding: '20px 6vw 24px', position: 'sticky', top: 0, zIndex: 10, boxShadow: '0 20px 60px rgba(91,33,182,0.08)' }}>
         <div style={{ maxWidth: 1200, margin: '0 auto' }}>
           <div className="admin-header-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 16 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -806,6 +809,14 @@ export default function AdminDashboard() {
               </button>
             ))}
           </div>
+          <div className="admin-hero-stats">
+            {heroStats.map((item) => (
+              <div key={item.label} style={{ padding: '16px 18px', borderRadius: 20, background: 'rgba(255,255,255,0.86)', border: '1px solid rgba(124,58,237,0.12)' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', color: 'rgba(26,10,46,0.45)', textTransform: 'uppercase' }}>{item.label}</div>
+                <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 24, fontWeight: 800, color: '#1a0a2e', marginTop: 10 }}>{item.value}</div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -840,7 +851,7 @@ export default function AdminDashboard() {
 
 function PaymentRow({ payment }) {
   return (
-    <div style={{ padding: '16px 18px', background: '#ffffff', border: '1px solid rgba(124,58,237,0.08)', borderRadius: 14 }}>
+    <div className="payment-list-item" style={{ padding: '16px 18px', background: '#ffffff', border: '1px solid rgba(124,58,237,0.08)', borderRadius: 14 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <div>
           <div style={{ fontSize: 15, fontWeight: 700, color: '#1a0a2e' }}>
