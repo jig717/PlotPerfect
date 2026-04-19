@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom"
 import { propertyService, saleRequestService } from "../../services"
 import { useAuth } from "../../context/AuthContext"
 import { toast } from "react-toastify"
+import { AMENITIES } from "../../constants"
 
 const STEPS = ["Basic Info","Location","Details","Amenities","Review"]
 
@@ -25,6 +26,8 @@ export default function PostPropertyPage() {
     locality:"",
     area:"",
     bhk:"",
+    bathrooms:"",
+    guestCapacity:"",
     amenities:[],
     sellViaAgent:false,
     sellViaAgentNote:"",
@@ -62,6 +65,16 @@ export default function PostPropertyPage() {
         Office: 'commercial'
       }
 
+      const toNumberOrUndefined = (value) => {
+        if (value === "" || value == null) return undefined
+        const nextValue = Number(value)
+        return Number.isFinite(nextValue) ? nextValue : undefined
+      }
+
+      const bedrooms = toNumberOrUndefined(data.bhk)
+      const bathrooms = toNumberOrUndefined(data.bathrooms)
+      const guestCapacity = toNumberOrUndefined(data.guestCapacity)
+
       const propertyData = {
         title: data.title,
         purpose: data.listingType,
@@ -73,8 +86,12 @@ export default function PostPropertyPage() {
           address: data.locality,
         },
         area: data.area,
-        bedrooms: Number(data.bhk),
-        bathrooms: 1,
+        bedrooms,
+        bhk: bedrooms,
+        bathrooms,
+        baths: bathrooms,
+        guestCapacity,
+        amenities: data.amenities,
         owner: user?._id,
       }
 
@@ -84,12 +101,19 @@ export default function PostPropertyPage() {
         throw new Error("Property created but no ID was returned")
       }
 
+      let imageUploadFailed = false
+
       if (imageFiles.length > 0) {
         const formData = new FormData()
         formData.append('propertyId', propertyId)
         formData.append('property_id', propertyId)
         imageFiles.forEach(file => formData.append('images', file))
-        await propertyService.uploadImages(propertyId, formData)
+        try {
+          await propertyService.uploadImages(propertyId, formData)
+        } catch (uploadError) {
+          imageUploadFailed = true
+          console.error('Failed to upload property images:', uploadError)
+        }
       }
 
       if (user?.role === 'owner' && data.sellViaAgent) {
@@ -99,8 +123,23 @@ export default function PostPropertyPage() {
         })
       }
 
-      toast.success(data.sellViaAgent ? "Property listed and shared with agents" : "Property Listed 🚀")
+      if (imageUploadFailed) {
+        toast.error("Property created, but image upload failed. Try uploading smaller images.")
+      } else {
+        toast.success(data.sellViaAgent ? "Property listed and shared with agents" : "Property listed successfully")
+      }
+
       navigate(user?.role === 'owner' ? "/dashboard/owner" : "/dashboard/agent")
+      return
+      /*
+
+      if (imageUploadFailed) {
+        toast.error("Property created, but image upload failed. Try uploading smaller images.")
+      } else {
+      toast.success(data.sellViaAgent ? "Property listed and shared with agents" : "Property Listed 🚀")
+      }
+      navigate(user?.role === 'owner' ? "/dashboard/owner" : "/dashboard/agent")
+      */
     } catch (error) {
       console.error(error)
       toast.error("Failed to create property")
@@ -172,14 +211,18 @@ export default function PostPropertyPage() {
           {step === 2 && (
             <>
               <Input label="Area (sqft)" type="number" value={data.area} onChange={v => set("area", v)} />
-              <Input label="BHK" value={data.bhk} onChange={v => set("bhk", v)} />
+              <div className="grid gap-4 sm:grid-cols-3">
+                <Input label="Bedrooms" type="number" min="0" value={data.bhk} onChange={v => set("bhk", v)} />
+                <Input label="Bathrooms" type="number" min="0" value={data.bathrooms} onChange={v => set("bathrooms", v)} />
+                <Input label="Guests" type="number" min="0" value={data.guestCapacity} onChange={v => set("guestCapacity", v)} />
+              </div>
             </>
           )}
 
           {step === 3 && (
             <>
               <div className="flex flex-wrap gap-2">
-                {["Parking","Gym","Lift","Security"].map(a => (
+                {AMENITIES.map(a => (
                   <button
                     key={a}
                     type="button"
@@ -236,7 +279,9 @@ export default function PostPropertyPage() {
                 <li><strong>City:</strong> {data.city || "—"}</li>
                 <li><strong>Locality:</strong> {data.locality || "—"}</li>
                 <li><strong>Area:</strong> {data.area || "—"} sqft</li>
-                <li><strong>BHK:</strong> {data.bhk || "—"}</li>
+                <li><strong>Bedrooms:</strong> {data.bhk || "—"}</li>
+                <li><strong>Bathrooms:</strong> {data.bathrooms || "—"}</li>
+                <li><strong>Guests:</strong> {data.guestCapacity || "—"}</li>
                 <li><strong>Amenities:</strong> {data.amenities.length ? data.amenities.join(", ") : "None"}</li>
                 <li><strong>Images:</strong> {imageFiles.length} file(s) selected</li>
               </ul>
@@ -305,12 +350,13 @@ export default function PostPropertyPage() {
 }
 
 /* ---------------- COMPONENTS ---------------- */
-function Input({ label, value, onChange, type = "text" }) {
+function Input({ label, value, onChange, type = "text", min }) {
   return (
     <div>
       <label className="block text-sm font-semibold text-[rgba(26,10,46,0.7)] mb-1">{label}</label>
       <input
         type={type}
+        min={min}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         className="w-full p-2 rounded-lg border border-[rgba(124,58,237,0.2)] bg-[#f9f9ff] text-[#1a0a2e] outline-none focus:border-[#7c3aed] focus:ring-1 focus:ring-[#7c3aed] transition"

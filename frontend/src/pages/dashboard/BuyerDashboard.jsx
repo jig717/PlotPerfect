@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { userService, inquiryService, threadService } from '../../services'
+import { userService, inquiryService, threadService, propertyService } from '../../services'
 import { useAuth } from '../../context/AuthContext'
 import { formatPrice, timeAgo, getInitials, resolveApiAssetUrl } from '../../utils/index'
 import { toast } from 'react-toastify'
@@ -36,6 +36,35 @@ const getVisitStatus = (visit) => visit?.status || visit?.visit_status || 'REQUE
 const getVisitDate = (visit) => visit?.scheduledDate || visit?.scheduled_date || null
 const getVisitBuyerId = (visit) =>
   visit?.buyer?._id || visit?.buyer_id || visit?.buyerId || visit?.user?._id || visit?.userId || null
+const getVisitPropertyId = (visit) =>
+  visit?.property?._id ||
+  visit?.property?.id ||
+  (typeof visit?.property === 'string' ? visit.property : null) ||
+  visit?.propertyId ||
+  visit?.property_id ||
+  null
+
+const getVisitPropertyTitle = (visit) => visit?.property?.title || 'Property Visit'
+const getVisitPropertyLocation = (visit) => visit?.property?.city || visit?.property?.location?.city || 'Location not specified'
+
+const sortVisits = (items) => {
+  const statusOrder = { REQUESTED: 0, CONFIRMED: 1, COMPLETED: 2, CANCELLED: 3 }
+
+  return [...items].sort((a, b) => {
+    const aStatus = String(getVisitStatus(a)).toUpperCase()
+    const bStatus = String(getVisitStatus(b)).toUpperCase()
+    const byStatus = (statusOrder[aStatus] ?? 99) - (statusOrder[bStatus] ?? 99)
+    if (byStatus !== 0) return byStatus
+
+    const aCreatedAt = a?.createdAt ? new Date(a.createdAt).getTime() : 0
+    const bCreatedAt = b?.createdAt ? new Date(b.createdAt).getTime() : 0
+    if (aCreatedAt !== bCreatedAt) return bCreatedAt - aCreatedAt
+
+    const aDate = getVisitDate(a) ? new Date(getVisitDate(a)).getTime() : 0
+    const bDate = getVisitDate(b) ? new Date(getVisitDate(b)).getTime() : 0
+    return bDate - aDate
+  })
+}
 
 const extractThreads = (payload) => {
   if (Array.isArray(payload)) return payload
@@ -245,7 +274,7 @@ function VisitCard({ visit, onCancel }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 14, flexWrap: 'wrap' }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 24, fontWeight: 800, color: theme.text }}>
-            {visit.property?.title || 'Property Visit'}
+            {getVisitPropertyTitle(visit)}
           </div>
           <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 10 }}>
             <PropertyMeta
@@ -256,7 +285,7 @@ function VisitCard({ visit, onCancel }) {
                   : 'To be confirmed'
               }
             />
-            <PropertyMeta label="Location" value={visit.property?.city || visit.property?.location?.city || 'Location not specified'} />
+            <PropertyMeta label="Location" value={getVisitPropertyLocation(visit)} />
           </div>
         </div>
 
@@ -390,6 +419,46 @@ export default function BuyerDashboard() {
   const [loading, setLoading] = useState(true)
   const threadNotificationRef = useRef({})
   const threadPollBootstrappedRef = useRef(false)
+  const visitRefreshInFlightRef = useRef(false)
+
+  const hydrateVisits = useCallback(async (rawVisits = []) => {
+    const userVisits = rawVisits.filter((visit) => {
+      const buyerId = getVisitBuyerId(visit)
+      return !buyerId || String(buyerId) === String(user._id)
+    })
+
+    const hydratedVisits = await Promise.all(
+      userVisits.map(async (visit) => {
+        const propertyId = getVisitPropertyId(visit)
+        const needsPropertyHydration =
+          propertyId &&
+          (!visit?.property ||
+            typeof visit.property === 'string' ||
+            !visit?.property?.title ||
+            (!visit?.property?.city && !visit?.property?.location?.city))
+
+        if (!needsPropertyHydration) return visit
+
+        try {
+          const propertyPayload = await propertyService.getById(propertyId)
+          const propertyData = propertyPayload?.data || propertyPayload
+          return propertyData ? { ...visit, property: propertyData } : visit
+        } catch {
+          return visit
+        }
+      })
+    )
+
+    return sortVisits(hydratedVisits)
+  }, [user?._id])
+
+  const loadVisits = useCallback(async () => {
+    if (!user?._id) return []
+
+    const visitsResponse = await visitService.getBuyerVisits({ limit: 100 })
+    const visitsData = extractVisitsList(visitsResponse)
+    return hydrateVisits(visitsData)
+  }, [hydrateVisits, user?._id])
 
   const fetchData = useCallback(async () => {
     if (!user) return
@@ -406,19 +475,12 @@ export default function BuyerDashboard() {
         const favorites = savedRes.value?.data || savedRes.value || []
         setSaved(Array.isArray(favorites) ? favorites.filter((favorite) => favorite && favorite.property) : [])
       } else {
-        console.error('Failed to fetch saved properties:', savedRes.reason)
         setSaved([])
       }
 
       if (visitsRes.status === 'fulfilled') {
-        const visitsData = extractVisitsList(visitsRes.value)
-        const userVisits = visitsData.filter((visit) => {
-          const buyerId = getVisitBuyerId(visit)
-          return !buyerId || buyerId === user._id
-        })
-        setVisits(userVisits)
+        setVisits(await hydrateVisits(extractVisitsList(visitsRes.value)))
       } else {
-        console.error('Failed to fetch visits:', visitsRes.reason)
         setVisits([])
       }
 
@@ -426,20 +488,57 @@ export default function BuyerDashboard() {
         const inquiriesData = inquiriesRes.value?.data || inquiriesRes.value || []
         setInquiries(Array.isArray(inquiriesData) ? inquiriesData : [])
       } else {
-        console.error('Failed to fetch inquiries:', inquiriesRes.reason)
         setInquiries([])
       }
     } catch (error) {
-      console.error('Error fetching buyer dashboard data:', error)
       toast.error('Failed to load dashboard data')
     } finally {
       setLoading(false)
     }
-  }, [user])
+  }, [hydrateVisits, user])
 
   useEffect(() => {
     fetchData()
   }, [fetchData, location.key])
+
+  useEffect(() => {
+    if (!user?._id) return
+
+    let cancelled = false
+
+    const refreshVisits = async () => {
+      if (visitRefreshInFlightRef.current) return
+      visitRefreshInFlightRef.current = true
+
+      try {
+        const nextVisits = await loadVisits()
+        if (!cancelled) {
+          setVisits(nextVisits)
+        }
+      } catch {
+        // Keep silent here to avoid noisy dashboard polling errors.
+      } finally {
+        visitRefreshInFlightRef.current = false
+      }
+    }
+
+    refreshVisits()
+
+    const intervalId = window.setInterval(refreshVisits, 20000)
+    const handleFocus = () => {
+      refreshVisits()
+    }
+
+    window.addEventListener('focus', handleFocus)
+    document.addEventListener('visibilitychange', handleFocus)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(intervalId)
+      window.removeEventListener('focus', handleFocus)
+      document.removeEventListener('visibilitychange', handleFocus)
+    }
+  }, [loadVisits, user?._id])
 
   useEffect(() => {
     if (!user?._id) return
@@ -635,9 +734,11 @@ export default function BuyerDashboard() {
           .buyer-header-row {
             flex-direction: column !important;
             align-items: stretch !important;
+            gap: 14px !important;
           }
           .buyer-header-actions {
             justify-content: stretch !important;
+            flex-wrap: wrap !important;
           }
           .buyer-header-actions > * {
             flex: 1 1 auto;
@@ -650,6 +751,25 @@ export default function BuyerDashboard() {
           }
           .buyer-row-actions button {
             flex: 1 1 auto;
+          }
+          .buyer-tab-scroll {
+            padding: 0 16px 14px !important;
+          }
+          .buyer-content-wrap {
+            padding-left: 16px !important;
+            padding-right: 16px !important;
+          }
+        }
+        @media (max-width: 480px) {
+          .buyer-stat-grid {
+            grid-template-columns: 1fr !important;
+          }
+          .buyer-header-row h1,
+          .buyer-header-row > div > div:first-child {
+            font-size: 24px !important;
+          }
+          .buyer-card {
+            border-radius: 16px !important;
           }
         }
       `}</style>

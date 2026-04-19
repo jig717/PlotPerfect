@@ -262,6 +262,53 @@ function Section({ title, children }) {
   );
 }
 
+function AmenityStatsStrip({ property }) {
+  const stats = [
+    {
+      label: "Bedrooms",
+      value: property?.bedrooms ?? property?.bhk,
+      icon: (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
+          <path d="M3 11V6.8A1.8 1.8 0 0 1 4.8 5h3.4A1.8 1.8 0 0 1 10 6.8V11" />
+          <path d="M14 11V8.8A1.8 1.8 0 0 1 15.8 7h3.4A1.8 1.8 0 0 1 21 8.8V11" />
+          <path d="M3 11h18v5H3z" />
+          <path d="M5 16v3M19 16v3" />
+        </svg>
+      ),
+    },
+    {
+      label: "Bathrooms",
+      value: property?.bathrooms ?? property?.baths,
+      icon: (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
+          <path d="M7 4h3a2 2 0 0 1 2 2v8" />
+          <path d="M5 13h11a2 2 0 0 1 2 2v1a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4v-3z" />
+          <path d="M7 8h5" />
+        </svg>
+      ),
+    },
+  ].filter((item) => item.value !== undefined && item.value !== null && item.value !== "");
+
+  if (!stats.length) return null;
+
+  return (
+    <div className={`grid ${stats.length === 2 ? "grid-cols-2" : "grid-cols-1"} rounded-lg border border-[rgba(124,58,237,0.16)] bg-[#f8f7ff]`}>
+      {stats.map((item, index) => (
+        <div
+          key={item.label}
+          className={`flex flex-col items-center justify-center gap-2 px-4 py-4 text-center text-[#7c3aed] ${index < stats.length - 1 ? "border-r border-[rgba(124,58,237,0.14)]" : ""}`}
+        >
+          {item.icon}
+          <span className="text-[10px] font-semibold uppercase tracking-[0.24em] text-[rgba(26,10,46,0.45)]">
+            {item.label}
+          </span>
+          <span className="text-base font-semibold text-[#1a0a2e]">{item.value}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function FloorPlansSection({ property }) {
   const floorPlans = normalizeFloorPlans(property);
   const [activePlanId, setActivePlanId] = useState(floorPlans[0]?.id || null);
@@ -1167,9 +1214,11 @@ export default function PropertyDetailPage() {
                 setReviewForm={setReviewForm}
               />
 
-              {property.amenities?.length > 0 && (
+              {(property.amenities?.length > 0 || property.bhk || property.baths || property.bedrooms || property.bathrooms) && (
                 <Section title="Amenities">
-                  <div className="flex flex-wrap gap-2">
+                  <AmenityStatsStrip property={property} />
+                  {property.amenities?.length > 0 && (
+                  <div className="mt-4 flex flex-wrap gap-2">
                     {property.amenities.map((a) => (
                       <span
                         key={a}
@@ -1179,6 +1228,7 @@ export default function PropertyDetailPage() {
                       </span>
                     ))}
                   </div>
+                  )}
                 </Section>
               )}
 

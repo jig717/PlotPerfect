@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { userService, propertyService, inquiryService, paymentService } from '../../services'
@@ -33,9 +33,7 @@ const TABS = ['Overview', 'Users', 'Properties', 'Inquiries', 'Payments', 'Repor
 
 // ---------- Helper chart components (new, but no existing names are changed) ----------
 function PropertyTrendChart({ properties }) {
-  const [chartData, setChartData] = useState({ labels: [], data: [] })
-
-  useEffect(() => {
+  const chartData = useMemo(() => {
     const months = []
     const today = new Date()
     for (let i = 5; i >= 0; i--) {
@@ -50,7 +48,7 @@ function PropertyTrendChart({ properties }) {
         counts[5 - monthIndex]++ // reverse so oldest first
       }
     })
-    setChartData({ labels: months, data: counts })
+    return { labels: months, data: counts }
   }, [properties])
 
   const data = {
@@ -78,19 +76,17 @@ function PropertyTrendChart({ properties }) {
 }
 
 function InquiryByTypeChart({ properties, inquiries }) {
-  const [chartData, setChartData] = useState({ labels: [], data: [] })
-
-  useEffect(() => {
+  const chartData = useMemo(() => {
     const propertyMap = new Map(properties.map(p => [p._id.toString(), p.type || 'other']))
     const typeCount = {}
     inquiries.forEach(inq => {
       const type = propertyMap.get(inq.property?._id?.toString()) || 'unknown'
       typeCount[type] = (typeCount[type] || 0) + 1
     })
-    setChartData({
+    return {
       labels: Object.keys(typeCount),
       data: Object.values(typeCount),
-    })
+    }
   }, [properties, inquiries])
 
   const data = {
@@ -116,18 +112,16 @@ function InquiryByTypeChart({ properties, inquiries }) {
 }
 
 function RolePieChart({ users }) {
-  const [chartData, setChartData] = useState({ labels: [], data: [] })
-
-  useEffect(() => {
+  const chartData = useMemo(() => {
     const roleCount = {}
     users.forEach(u => {
       const role = u.role || 'buyer'
       roleCount[role] = (roleCount[role] || 0) + 1
     })
-    setChartData({
+    return {
       labels: Object.keys(roleCount),
       data: Object.values(roleCount),
-    })
+    }
   }, [users])
 
   const data = {
@@ -152,9 +146,7 @@ function RolePieChart({ users }) {
 }
 
 function TopPropertiesTable({ properties, inquiries }) {
-  const [topProps, setTopProps] = useState([])
-
-  useEffect(() => {
+  const topProps = useMemo(() => {
     const inquiryCount = new Map()
     inquiries.forEach(inq => {
       const propId = inq.property?._id?.toString()
@@ -165,7 +157,7 @@ function TopPropertiesTable({ properties, inquiries }) {
       inquiryCount: inquiryCount.get(p._id.toString()) || 0,
     }))
     propsWithCount.sort((a, b) => b.inquiryCount - a.inquiryCount)
-    setTopProps(propsWithCount.slice(0, 5))
+    return propsWithCount.slice(0, 5)
   }, [properties, inquiries])
 
   return (
@@ -195,7 +187,7 @@ function TopPropertiesTable({ properties, inquiries }) {
   )
 }
 
-function StatCard({ icon, label, value, change }) {
+function StatCard({ icon, label, value }) {
   return (
     <div 
       style={{ 
@@ -242,14 +234,6 @@ function EditUserModal({ user, onClose, onSave, saving }) {
     email: user?.email || '',
     role: user?.role || 'buyer',
   })
-
-  useEffect(() => {
-    setForm({
-      name: user?.name || '',
-      email: user?.email || '',
-      role: user?.role || 'buyer',
-    })
-  }, [user?._id, user?.name, user?.email, user?.role])
 
   if (!user) return null
 
@@ -486,6 +470,7 @@ export default function AdminDashboard() {
           totalRevenue: (paymentsRes.value?.data || []).reduce((sum, payment) => sum + Number(payment?.amount || 0), 0),
         })
       } catch (error) {
+        console.error('Failed to load admin dashboard:', error)
         toast.error('Failed to load dashboard data')
       } finally {
         setLoading(false)
@@ -669,7 +654,7 @@ export default function AdminDashboard() {
       </div>
 
       {/* Charts row 1 */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 32 }}>
+      <div className="charts-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 32 }}>
         <div style={{ background: '#ffffff', borderRadius: 16, border: '1px solid rgba(124,58,237,0.1)', padding: 20 }}>
           <h3 style={{ fontFamily: "'Playfair Display',serif", fontSize: 18, fontWeight: 700, color: '#1a0a2e', marginBottom: 16 }}>Properties Added (Last 6 Months)</h3>
           <PropertyTrendChart properties={properties} />
@@ -681,7 +666,7 @@ export default function AdminDashboard() {
       </div>
 
       {/* Charts row 2 */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 32 }}>
+      <div className="charts-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 32 }}>
         <div style={{ background: '#ffffff', borderRadius: 16, border: '1px solid rgba(124,58,237,0.1)', padding: 20 }}>
           <h3 style={{ fontFamily: "'Playfair Display',serif", fontSize: 18, fontWeight: 700, color: '#1a0a2e', marginBottom: 16 }}>User Role Distribution</h3>
           <RolePieChart users={users} />
@@ -694,29 +679,26 @@ export default function AdminDashboard() {
     </div>,
   ]
 
-  const heroStats = [
-    { label: 'Users', value: stats.totalUsers || 0 },
-    { label: 'Properties', value: stats.totalProperties || 0 },
-    { label: 'Inquiries', value: stats.totalInquiries || 0 },
-    { label: 'Revenue', value: formatPrice(stats.totalRevenue || 0) },
-  ]
-
   return (
     <div className="admin-shell" style={{ minHeight: '100vh', background: 'linear-gradient(180deg, #f5f8ff 0%, #f8f7ff 28%, #ffffff 100%)', fontFamily: "'DM Sans',sans-serif", color: '#1a0a2e', position: 'relative', overflow: 'hidden' }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@700;800&display=swap');
         *{box-sizing:border-box;}
         .admin-shell::before{content:'';position:absolute;inset:0 0 auto;height:320px;background:radial-gradient(circle at top left, rgba(14,165,233,0.14), transparent 36%),radial-gradient(circle at top right, rgba(124,58,237,0.18), transparent 40%);pointer-events:none;}
-        .admin-hero-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:18px;}
         .list-row { display: grid; gap: 16px; padding: 14px 20px; background: #ffffff; border: 1px solid rgba(124,58,237,0.08); border-radius: 14px; align-items: center; transition: all 0.2s; }
         .user-row { grid-template-columns: 48px 1fr 120px 100px; }
         .prop-row { grid-template-columns: 80px 1fr 120px 120px; }
-        @media(max-width:900px){.admin-hero-stats{grid-template-columns:repeat(2,minmax(0,1fr));}}
         @media(max-width:768px){
-          .admin-header-row{flex-direction:column!important;gap:16px!important;}
-          .admin-hero-stats{grid-template-columns:1fr;}
+          .admin-header-row{flex-direction:column!important;gap:12px!important;align-items:stretch!important;}
           .user-row, .prop-row { grid-template-columns: 1fr; gap: 12px; text-align: center; justify-items: center; }
-          .payment-list-item{flex-direction:column; text-align:center; align-items:center;}
+          .payment-list-item{flex-direction:column!important; text-align:center; align-items:center;}
+          .admin-shell > div:last-child { padding-left: 16px !important; padding-right: 16px !important; }
+          .admin-tab-scroll { overflow-x: auto !important; scrollbar-width: none !important; }
+          .charts-2col { grid-template-columns: 1fr !important; }
+        }
+        @media(max-width:480px){
+          .user-row, .prop-row { grid-template-columns: 1fr; }
+          .admin-header-row button { font-size: 12px !important; padding: 8px 12px !important; }
         }
       `}</style>
 
@@ -809,14 +791,6 @@ export default function AdminDashboard() {
               </button>
             ))}
           </div>
-          <div className="admin-hero-stats">
-            {heroStats.map((item) => (
-              <div key={item.label} style={{ padding: '16px 18px', borderRadius: 20, background: 'rgba(255,255,255,0.86)', border: '1px solid rgba(124,58,237,0.12)' }}>
-                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', color: 'rgba(26,10,46,0.45)', textTransform: 'uppercase' }}>{item.label}</div>
-                <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 24, fontWeight: 800, color: '#1a0a2e', marginTop: 10 }}>{item.value}</div>
-              </div>
-            ))}
-          </div>
         </div>
       </div>
 
@@ -839,6 +813,7 @@ export default function AdminDashboard() {
         />
       )}
       <EditUserModal
+        key={editingUser?._id || 'edit-user'}
         user={editingUser}
         onClose={() => setEditingUser(null)}
         onSave={handleSaveUser}

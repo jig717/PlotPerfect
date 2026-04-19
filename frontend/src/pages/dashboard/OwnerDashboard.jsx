@@ -843,27 +843,42 @@ export default function OwnerDashboard() {
         }
         
         /* Responsive adjustments */
+        @media (max-width: 1024px) {
+          .owner-stats-grid {
+            grid-template-columns: repeat(2, minmax(0,1fr)) !important;
+          }
+          .owner-two-col {
+            grid-template-columns: 1fr !important;
+          }
+        }
         @media (max-width: 768px) {
           .owner-header-row {
             flex-direction: column !important;
-            gap: 16px !important;
-            align-items: flex-start !important;
-          }
-          .property-row {
-            grid-template-columns: 80px 1fr auto !important;
+            align-items: stretch !important;
             gap: 12px !important;
           }
-          .property-row > div:nth-child(3), /* price */
-          .property-row > div:nth-child(4) { /* status dropdown */
-            grid-column: span 2;
-            text-align: left !important;
-            justify-self: start !important;
-          }
-          .property-row > div:nth-child(5) { /* buttons */
-            grid-column: span 3;
+          .owner-header-actions {
+            flex-wrap: wrap !important;
             justify-content: flex-start !important;
-            margin-top: 4px;
           }
+          .owner-tab-bar {
+            overflow-x: auto !important;
+            scrollbar-width: none !important;
+            padding-bottom: 4px !important;
+          }
+          .owner-stats-grid {
+            grid-template-columns: 1fr !important;
+          }
+          .owner-content-area {
+            padding: 20px 16px 48px !important;
+          }
+          .owner-table-wrap {
+            overflow-x: auto !important;
+          }
+          .owner-table-wrap table {
+            min-width: 500px;
+          }
+          
           .stat-cards {
             grid-template-columns: 1fr !important;
           }
@@ -930,7 +945,7 @@ export default function OwnerDashboard() {
                 </div>
               </div>
             </div>
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            <div className="owner-header-actions" style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
               <button
                 onClick={() => navigate('/')}
                 style={{
@@ -1027,7 +1042,7 @@ export default function OwnerDashboard() {
         </div>
       </div>
 
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '32px 6vw 64px' }}>
+      <div className="owner-content-area" style={{ maxWidth: 1100, margin: '0 auto', padding: '32px 6vw 64px' }}>
         {loading ? (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(180px,1fr))', gap: 20 }}>
             {Array.from({ length: 4 }).map((_, i) => (

@@ -35,7 +35,8 @@ export const propertyService = {
   myListings: () => api.get('/property/my-listings'),
   getByOwner: (ownerId) => api.get(`/property/owner/${ownerId}`),
   uploadImages: (propertyId, formData) => api.post('/propertyimage', formData, {
-  headers: { 'Content-Type': 'multipart/form-data' },
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 60000,
   }),
 };
 

@@ -16,6 +16,7 @@ export default function NotificationBell({ user }) {
   const [isOpen, setIsOpen] = useState(false)
   const [items, setItems] = useState([])
   const rootRef = useRef(null)
+  const pollInFlightRef = useRef(false)
 
   const unreadCount = items.filter((item) => !item.read).length
 
@@ -24,6 +25,9 @@ export default function NotificationBell({ user }) {
     let cancelled = false
 
     const poll = async () => {
+      if (pollInFlightRef.current) return
+      pollInFlightRef.current = true
+
       try {
         const data = await notificationService.getNotifications()
         if (cancelled) return
@@ -44,13 +48,15 @@ export default function NotificationBell({ user }) {
           return newNotifications;
         });
 
-      } catch (error) {
-        console.error("Failed to fetch notifications", error)
+      } catch {
+        // Silent polling failure: avoid flooding the console while the API is slow.
+      } finally {
+        pollInFlightRef.current = false
       }
     }
 
     poll()
-    const timer = window.setInterval(poll, 5000) // Poll every 5 seconds as requested
+    const timer = window.setInterval(poll, 20000)
     return () => {
       cancelled = true
       window.clearInterval(timer)

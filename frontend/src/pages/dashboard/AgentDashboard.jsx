@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { agentService, propertyService, inquiryService, threadService, saleRequestService } from '../../services'
 import { useAuth } from '../../context/AuthContext'
@@ -58,80 +58,29 @@ const PROPERTY_CATEGORY_OPTIONS = [
   { value: 'sale', label: 'For Sale', propertyType: 'Apartment', purpose: 'sale', type: 'apartment' },
   { value: 'rent', label: 'For Rent', propertyType: 'Apartment', purpose: 'rent', type: 'apartment' },
   { value: 'pg', label: 'For PG', propertyType: 'PG', purpose: 'pg', type: 'pg' },
-  { value: 'commercial', label: 'Commercial', propertyType: 'Commercial', purpose: 'sale', type: 'commercial' },
-  { value: 'plot', label: 'Plot', propertyType: 'Plot', purpose: 'sale', type: 'plot' },
 ]
 
-const getLeadContact = (lead) => lead?.user || lead?.buyer || lead?.sender || lead?.createdBy || null
-
-const getLeadName = (lead) =>
-  lead?.name ||
-  getLeadContact(lead)?.name ||
-  getLeadContact(lead)?.username ||
-  lead?.buyer_name ||
-  'Buyer'
-
-const getLeadEmail = (lead) =>
-  lead?.email ||
-  getLeadContact(lead)?.email ||
-  ''
-
-const getLeadPhone = (lead) =>
-  lead?.phone ||
-  getLeadContact(lead)?.phone ||
-  getLeadContact(lead)?.mobile ||
-  ''
-
-const getPropertyCategoryValue = (prop) => {
-  const purpose = String(prop?.listingType || prop?.purpose || '').trim().toLowerCase()
-  const type = String(prop?.propertyType || prop?.type || '').trim().toLowerCase()
-
-  if (purpose === 'pg' || type === 'pg') return 'pg'
-  if (type === 'commercial') return 'commercial'
-  if (type === 'plot') return 'plot'
-  if (purpose === 'rent') return 'rent'
-  return 'sale'
-}
-
-const getPropertyCategoryLabel = (prop) => {
-  const match = PROPERTY_CATEGORY_OPTIONS.find((option) => option.value === getPropertyCategoryValue(prop))
-  return match?.label || 'For Sale'
-}
-
 const toSafeNumber = (value) => {
-  const num = Number(value)
-  return Number.isFinite(num) ? num : 0
-}
-
-const extractDailyViewEntries = (payload) => {
-  if (Array.isArray(payload)) return payload
-  if (Array.isArray(payload?.data)) return payload.data
-  if (Array.isArray(payload?.views)) return payload.views
-  if (Array.isArray(payload?.dailyViews)) return payload.dailyViews
-  return []
+  const numeric = Number(value)
+  return Number.isFinite(numeric) ? numeric : 0
 }
 
 const resolveDailyViewDate = (entry) =>
-  entry?.date ||
-  entry?.day ||
-  entry?.label ||
-  entry?.createdAt ||
-  entry?._id?.date ||
-  null
+  entry?.date || entry?.day || entry?.viewDate || entry?.createdAt || null
 
 const resolveDailyViewCount = (entry) =>
-  entry?.views ??
-  entry?.count ??
-  entry?.totalViews ??
-  entry?.value ??
-  entry?._id?.views ??
-  0
+  entry?.views || entry?.count || entry?.totalViews || entry?.value || 0
 
 const normalizeDailyViews = (payload) => {
-  const entries = extractDailyViewEntries(payload)
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
+  const entries = Array.isArray(payload)
+    ? payload
+    : Array.isArray(payload?.data)
+      ? payload.data
+      : Array.isArray(payload?.views)
+        ? payload.views
+        : []
 
+  const today = new Date()
   const dayMap = new Map()
   for (let offset = 6; offset >= 0; offset -= 1) {
     const day = new Date(today)
@@ -162,6 +111,23 @@ const normalizeDailyViews = (payload) => {
 
   return Array.from(dayMap.values()).sort((a, b) => a.timestamp - b.timestamp)
 }
+
+const getPropertyCategoryValue = (property) => {
+  const purpose = String(property?.purpose || property?.listingType || '').toLowerCase()
+  const type = String(property?.type || property?.propertyType || '').toLowerCase()
+  if (purpose === 'pg' || type === 'pg') return 'pg'
+  if (purpose === 'rent') return 'rent'
+  return 'sale'
+}
+
+const getLeadName = (lead) =>
+  lead?.user?.name || lead?.name || lead?.buyer?.name || lead?.email || 'Buyer'
+
+const getLeadEmail = (lead) =>
+  lead?.user?.email || lead?.email || lead?.buyer?.email || ''
+
+const getLeadPhone = (lead) =>
+  lead?.user?.phone || lead?.phone || lead?.buyer?.phone || ''
 
 const extractThreads = (payload) => {
   if (Array.isArray(payload)) return payload
@@ -789,10 +755,22 @@ export default function AgentDashboard() {
   const inquiryPollBootstrappedRef = useRef(false)
   const saleRequestNotificationRef = useRef({})
   const saleRequestPollBootstrappedRef = useRef(false)
+  const visitRequestInFlightRef = useRef(false)
 
   // Fetch agent's visits
-  const fetchAgentVisits = async (agentListings = listings) => {
-    setVisitsLoading(true)
+  const fetchAgentVisits = useCallback(async (agentListings = [], options = {}) => {
+    const { showLoading = false, silent = false } = options
+
+    if (visitRequestInFlightRef.current) {
+      return
+    }
+
+    visitRequestInFlightRef.current = true
+
+    if (showLoading) {
+      setVisitsLoading(true)
+    }
+
     try {
       const res = await visitService.getAgentVisits({ limit: 100 })
       const visitList = extractVisitsList(res)
@@ -819,12 +797,17 @@ export default function AgentDashboard() {
         })
       setVisits(nextVisits)
     } catch (err) {
-      console.error('Failed to fetch visits:', err)
-      toast.error('Could not load visit requests')
+      if (!silent) {
+        console.error('Failed to fetch visits:', err)
+        toast.error('Could not load visit requests')
+      }
     } finally {
-      setVisitsLoading(false)
+      visitRequestInFlightRef.current = false
+      if (showLoading) {
+        setVisitsLoading(false)
+      }
     }
-  }
+  }, [])
 
   // Update visit status (confirm/cancel/complete)
   const handleVisitStatus = async (visitId, newStatus) => {
@@ -862,10 +845,10 @@ export default function AgentDashboard() {
         if (propsRes.status === 'fulfilled') {
           const listingsData = propsRes.value.data || []
           setListings(listingsData)
-          await fetchAgentVisits(listingsData)
+          await fetchAgentVisits(listingsData, { showLoading: true })
         } else {
           console.error('Failed to fetch listings:', propsRes.reason)
-          await fetchAgentVisits([])
+          await fetchAgentVisits([], { showLoading: true })
         }
 
         if (inquiriesRes.status === 'fulfilled') {
@@ -926,8 +909,7 @@ export default function AgentDashboard() {
       }
     }
     fetchData()
-    fetchAgentVisits()   // load visits separately
-  }, [user])
+  }, [user, fetchAgentVisits])
 
   useEffect(() => {
     if (!user?._id) return
@@ -1086,10 +1068,11 @@ export default function AgentDashboard() {
   useEffect(() => {
     if (!user?._id) return;
     const intervalId = setInterval(() => {
-      fetchAgentVisits(listings);
-    }, 10000);
+      fetchAgentVisits(listings, { silent: true });
+    }, 20000);
     return () => clearInterval(intervalId);
-  }, [user?._id, listings]);
+  }, [user?._id, listings, fetchAgentVisits]);
+
 
   const handleDeleteListing = async (id) => {
     if (!window.confirm('Delete this listing?')) return
@@ -1383,12 +1366,6 @@ export default function AgentDashboard() {
     </div>,
   ]
 
-  const heroStats = [
-    { label: 'Listings', value: listings.length || 0 },
-    { label: 'Leads', value: leads.length || 0 },
-    { label: 'Visits', value: visits.length || 0 },
-    { label: 'Commission', value: formatPrice(stats.totalCommissionEarned || commissionAnalytics?.summary?.totalCommissionEarned || 0) },
-  ]
 
   return (
     <div className="agent-shell" style={{ minHeight:'100vh', background:'linear-gradient(180deg, #f4fbff 0%, #f8f7ff 24%, #ffffff 100%)', fontFamily:"'DM Sans',sans-serif", color:'#1a0a2e', position:'relative', overflow:'hidden' }}>
@@ -1405,21 +1382,11 @@ export default function AgentDashboard() {
             radial-gradient(circle at top right, rgba(124,58,237,0.16), transparent 38%);
           pointer-events: none;
         }
-        .agent-hero-stats {
-          display: grid;
-          grid-template-columns: repeat(4, minmax(0, 1fr));
-          gap: 12px;
-          margin-top: 18px;
-        }
-        
         @media (max-width: 768px) {
           .ag-header-row {
             flex-direction: column !important;
             gap: 12px !important;
             align-items: flex-start !important;
-          }
-          .agent-hero-stats {
-            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
           }
           .charts-row {
             grid-template-columns: 1fr !important;
@@ -1433,11 +1400,19 @@ export default function AgentDashboard() {
         }
         
         @media (max-width: 480px) {
-          .agent-hero-stats {
-            grid-template-columns: 1fr !important;
-          }
           .chart-container {
-            height: 220px !important;
+            height: 200px !important;
+          }
+          .ag-header-row {
+            padding: 0 !important;
+          }
+          .listing-row {
+            grid-template-columns: 48px 1fr !important;
+            gap: 8px !important;
+          }
+          .listing-row > div:nth-child(3),
+          .listing-row > div:nth-child(4) {
+            grid-column: 2;
           }
           .listing-row {
             grid-template-columns: 50px 1fr auto auto !important;
@@ -1483,18 +1458,10 @@ export default function AgentDashboard() {
                 }}>{t}</button>
             ))}
           </div>
-          <div className="agent-hero-stats">
-            {heroStats.map((item) => (
-              <div key={item.label} style={{ padding: '16px 18px', borderRadius: 20, background: 'rgba(255,255,255,0.86)', border: '1px solid rgba(14,165,233,0.14)' }}>
-                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', color: 'rgba(26,10,46,0.45)', textTransform: 'uppercase' }}>{item.label}</div>
-                <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 24, fontWeight: 800, color: '#1a0a2e', marginTop: 10 }}>{item.value}</div>
-              </div>
-            ))}
-          </div>
         </div>
       </div>
 
-      <div style={{ maxWidth:1100, margin:'0 auto', padding:'32px 6vw 60px' }}>
+      <div className="agent-content" style={{ maxWidth:1100, margin:'0 auto', padding:'32px 6vw 60px' }}>
         {loading
           ? <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(180px,1fr))', gap:16 }}>{Array.from({length:4}).map((_,i)=><div key={i} style={{ height:110, background:'#f0eeff', borderRadius:14, animation:'pulse 1.5s infinite' }}/>)}</div>
           : tabContent[tab]

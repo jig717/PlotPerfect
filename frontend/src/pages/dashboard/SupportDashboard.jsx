@@ -327,13 +327,6 @@
         return name.includes(keyword)
       })
 
-    const heroStats = [
-      { label: 'Total Tickets', value: tickets.length },
-      { label: 'Open', value: openCount },
-      { label: 'In Progress', value: inProgCount },
-      { label: 'Resolved', value: resolvedCount },
-    ]
-
     const tabContent = [
       /* ── TICKETS TAB ── */
       <div>
@@ -406,20 +399,30 @@
               radial-gradient(circle at top right, rgba(124,58,237,0.16), transparent 40%);
             pointer-events: none;
           }
-          .support-hero-stats {
-            display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
-            gap: 12px;
-            margin-top: 18px;
-          }
           @media (max-width: 768px) {
-            .support-hero-stats {
-              grid-template-columns: repeat(2, minmax(0, 1fr));
+            .support-layout {
+              flex-direction: column !important;
             }
-          }
-          @media (max-width: 480px) {
-            .support-hero-stats {
-              grid-template-columns: 1fr;
+            .support-sidebar {
+              width: 100% !important;
+              max-width: 100% !important;
+              border-right: none !important;
+              border-bottom: 1px solid rgba(124,58,237,0.1) !important;
+            }
+            .support-chat-panel {
+              width: 100% !important;
+            }
+            .support-header-row {
+              flex-direction: column !important;
+              align-items: stretch !important;
+              gap: 10px !important;
+            }
+            .support-header-actions {
+              flex-wrap: wrap !important;
+            }
+            .support-content {
+              padding-left: 16px !important;
+              padding-right: 16px !important;
             }
           }
         `}</style>
@@ -434,7 +437,7 @@
           <div style={{ maxWidth: 1100, margin: '0 auto' }}>
 
             {/* Top row */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 22, flexWrap: 'wrap', gap: 12 }}>
+            <div className="support-header-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 22, flexWrap: 'wrap', gap: 12 }}>
               {/* Left — avatar + info */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                 <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 800, color: '#fff', boxShadow: '0 4px 16px rgba(124,58,237,0.25)', flexShrink: 0 }}>
@@ -454,7 +457,7 @@
               </div>
 
       {/* Right — actions */}
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              <div className="support-header-actions" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                 <button
                   onClick={() => navigate('/')}
                   style={{
@@ -552,19 +555,11 @@
                 </button>
               ))}
             </div>
-            <div className="support-hero-stats">
-              {heroStats.map((item) => (
-                <div key={item.label} style={{ padding: '16px 18px', borderRadius: 20, background: 'rgba(255,255,255,0.86)', border: '1px solid rgba(6,182,212,0.14)' }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', color: 'rgba(26,10,46,0.45)', textTransform: 'uppercase' }}>{item.label}</div>
-                  <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 24, fontWeight: 800, color: '#1a0a2e', marginTop: 10 }}>{item.value}</div>
-                </div>
-              ))}
-            </div>
           </div>
         </div>
 
         {/* ── CONTENT ── */}
-        <div style={{ maxWidth: 1100, margin: '0 auto', padding: '32px 6vw 60px' }}>
+        <div className="support-content" style={{ maxWidth: 1100, margin: '0 auto', padding: '32px 6vw 60px' }}>
           {tabContent[tab]}
         </div>
         {activeInquiry && (
