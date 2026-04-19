@@ -490,7 +490,7 @@ export default function BuyerDashboard() {
       } else {
         setInquiries([])
       }
-    } catch (error) {
+    } catch {
       toast.error('Failed to load dashboard data')
     } finally {
       setLoading(false)
