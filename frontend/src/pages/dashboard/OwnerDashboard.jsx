@@ -99,57 +99,7 @@ function SaleRequestOwnerCard({ request, onOpenConversation, onMarkPaymentReceiv
   )
 }
 
-/* ── Stat Card (light theme) ── */
-function StatCard({ icon, label, value, change, up = true }) {
-  return (
-    <div 
-      style={{ 
-        background: '#ffffff', 
-        border: '1px solid rgba(124,58,237,0.12)', 
-        borderRadius: 16, 
-        padding: '20px 24px', 
-        boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
-        transition: 'all 0.25s cubic-bezier(0.2, 0, 0, 1)',
-        cursor: 'pointer',
-      }}
-      onMouseEnter={e => {
-        e.currentTarget.style.transform = 'translateY(-2px)';
-        e.currentTarget.style.boxShadow = '0 8px 24px rgba(124,58,237,0.12)';
-        e.currentTarget.style.borderColor = 'rgba(124,58,237,0.3)';
-      }}
-      onMouseLeave={e => {
-        e.currentTarget.style.transform = 'translateY(0)';
-        e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.02)';
-        e.currentTarget.style.borderColor = 'rgba(124,58,237,0.12)';
-      }}
-    >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: 16 }}>
-        <div style={{ 
-          width: 48, height: 48, borderRadius: 14, background: '#f0eeff', 
-          border: '1px solid rgba(124,58,237,0.15)', display: 'flex', 
-          alignItems: 'center', justifyContent: 'center', fontSize: 20, color: '#7c3aed' 
-        }}>
-          {icon}
-        </div>
-        {change && (
-          <span style={{ 
-            fontSize: 12, fontWeight: 600, padding: '4px 8px', borderRadius: 20, 
-            background: up ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)', 
-            color: up ? '#16a34a' : '#dc2626' 
-          }}>
-            {up ? '↑' : '↓'} {change}
-          </span>
-        )}
-      </div>
-      <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 32, fontWeight: 800, color: '#1a0a2e', lineHeight: 1.2 }}>
-        {value}
-      </div>
-      <div style={{ fontSize: 14, color: 'rgba(26,10,46,0.5)', marginTop: 6 }}>{label}</div>
-    </div>
-  )
-}
-
-/* ── Property Row (light theme) – with editable status dropdown ── */
+/* Property Row (light theme) – with editable status dropdown ── */
 function PropertyRow({ prop, onDelete, onStatusChange, onCategoryChange }) {
   const navigate = useNavigate()
   const [updatingStatus, setUpdatingStatus] = useState(false)
@@ -701,12 +651,6 @@ export default function OwnerDashboard() {
 
   const tabContent = [
     <div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 20, marginBottom: 32 }}>
-        <StatCard icon="🏘" label="Active Listings" value={stats.activeListings || 0} change="2 this week" up />
-        <StatCard icon="👥" label="Total Inquiries" value={stats.totalInquiries || 0} change="+5" up />
-        <StatCard icon="👁" label="Profile Views" value={stats.totalViews || 0} change="+12%" up />
-        <StatCard icon="⭐" label="Avg Rating" value={stats.avgRating ? `${stats.avgRating}/5` : '—'} />
-      </div>
       <div style={{ background: '#ffffff', borderRadius: 16, border: '1px solid rgba(124,58,237,0.1)', padding: 20, marginBottom: 32 }}>
         <BarChart data={viewsData} label="Property Views This Week" />
       </div>
@@ -801,23 +745,7 @@ export default function OwnerDashboard() {
         </div>
       )}
     </div>,
-    <div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 20 }}>
-        {[
-          { icon: '📊', label: 'Total Views', value: stats.totalViews || 0 },
-          { icon: '💰', label: 'Total Value', value: stats.totalValue ? formatPrice(stats.totalValue) : '—' },
-          { icon: '📈', label: 'Conversion Rate', value: stats.conversionRate ? `${stats.conversionRate}%` : '—' },
-          { icon: '⭐', label: 'Avg Response Time', value: stats.avgResponse || '< 2h' },
-        ].map(s => <StatCard key={s.label} {...s} />)}
-      </div>
-    </div>,
-  ]
-
-  const heroStats = [
-    { label: 'Live Listings', value: stats.activeListings || 0 },
-    { label: 'Buyer Leads', value: stats.totalInquiries || 0 },
-    { label: 'Profile Views', value: stats.totalViews || 0 },
-    { label: 'Payments', value: payments.length || 0 },
+    <div />,
   ]
 
   return (
@@ -835,13 +763,6 @@ export default function OwnerDashboard() {
             radial-gradient(circle at top right, rgba(124,58,237,0.18), transparent 38%);
           pointer-events: none;
         }
-        .owner-hero-stats {
-          display: grid;
-          grid-template-columns: repeat(4, minmax(0, 1fr));
-          gap: 12px;
-          margin-top: 18px;
-        }
-        
         /* Responsive adjustments */
         @media (max-width: 1024px) {
           .owner-stats-grid {
@@ -882,9 +803,6 @@ export default function OwnerDashboard() {
           .stat-cards {
             grid-template-columns: 1fr !important;
           }
-          .owner-hero-stats {
-            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-          }
           .charts-row {
             grid-template-columns: 1fr !important;
             gap: 16px !important;
@@ -895,9 +813,6 @@ export default function OwnerDashboard() {
         }
         
         @media (max-width: 480px) {
-          .owner-hero-stats {
-            grid-template-columns: 1fr !important;
-          }
           .property-row {
             grid-template-columns: 60px 1fr !important;
             gap: 8px !important;
@@ -1031,23 +946,13 @@ export default function OwnerDashboard() {
               </button>
             ))}
           </div>
-          <div className="owner-hero-stats">
-            {heroStats.map((item) => (
-              <div key={item.label} style={{ padding: '16px 18px', borderRadius: 20, background: 'rgba(255,255,255,0.86)', border: '1px solid rgba(249,115,22,0.14)' }}>
-                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', color: 'rgba(26,10,46,0.45)', textTransform: 'uppercase' }}>{item.label}</div>
-                <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 24, fontWeight: 800, color: '#1a0a2e', marginTop: 10 }}>{item.value}</div>
-              </div>
-            ))}
-          </div>
         </div>
       </div>
 
       <div className="owner-content-area" style={{ maxWidth: 1100, margin: '0 auto', padding: '32px 6vw 64px' }}>
         {loading ? (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(180px,1fr))', gap: 20 }}>
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} style={{ height: 120, background: '#f0eeff', borderRadius: 16, animation: 'pulse 1.5s infinite' }} />
-            ))}
+          <div style={{ padding: 20, background: '#ffffff', border: '1px solid rgba(124,58,237,0.08)', borderRadius: 14, color: 'rgba(26,10,46,0.55)' }}>
+            Loading dashboard...
           </div>
         ) : (
           tabContent[tab]
@@ -1060,3 +965,7 @@ export default function OwnerDashboard() {
     </div>
   )
 }
+
+
+
+

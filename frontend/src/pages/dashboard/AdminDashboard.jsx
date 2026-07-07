@@ -187,47 +187,6 @@ function TopPropertiesTable({ properties, inquiries }) {
   )
 }
 
-function StatCard({ icon, label, value }) {
-  return (
-    <div 
-      style={{ 
-        background: '#ffffff', 
-        border: '1px solid rgba(124,58,237,0.12)', 
-        borderRadius: 16, 
-        padding: '20px 24px', 
-        boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
-        transition: 'all 0.25s cubic-bezier(0.2, 0, 0, 1)',
-        cursor: 'pointer',
-      }}
-      onMouseEnter={e => {
-        e.currentTarget.style.transform = 'translateY(-2px)';
-        e.currentTarget.style.boxShadow = '0 8px 24px rgba(124,58,237,0.12)';
-        e.currentTarget.style.borderColor = 'rgba(124,58,237,0.3)';
-      }}
-      onMouseLeave={e => {
-        e.currentTarget.style.transform = 'translateY(0)';
-        e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.02)';
-        e.currentTarget.style.borderColor = 'rgba(124,58,237,0.12)';
-      }}
-    >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: 16 }}>
-        <div style={{ 
-          width: 48, height: 48, borderRadius: 14, background: '#f0eeff', 
-          border: '1px solid rgba(124,58,237,0.15)', display: 'flex', 
-          alignItems: 'center', justifyContent: 'center', fontSize: 20, color: '#7c3aed' 
-        }}>
-          {icon}
-        </div>
-        
-      </div>
-      <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 32, fontWeight: 800, color: '#1a0a2e', lineHeight: 1.2 }}>
-        {value}
-      </div>
-      <div style={{ fontSize: 14, color: 'rgba(26,10,46,0.5)', marginTop: 6 }}>{label}</div>
-    </div>
-  )
-}
-
 function EditUserModal({ user, onClose, onSave, saving }) {
   const [form, setForm] = useState({
     name: user?.name || '',
@@ -528,14 +487,7 @@ export default function AdminDashboard() {
 
   const tabContent = [
     // Overview (unchanged)
-    <div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(240px,1fr))', gap: 20, marginBottom: 32 }}>
-        <StatCard icon="US" label="Total Users" value={stats.totalUsers} />
-        <StatCard icon="PR" label="Properties" value={stats.totalProperties} />
-        <StatCard icon="IN" label="Inquiries" value={stats.totalInquiries} />
-        <StatCard icon="PM" label="Revenue" value={formatPrice(stats.totalRevenue || 0)} />
-      </div>
-    </div>,
+    <div />,
 
     // Users (unchanged)
     <div>
@@ -645,14 +597,6 @@ export default function AdminDashboard() {
 
     // Reports now with real data
     <div>
-      {/* Key metrics */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(240px,1fr))', gap: 20, marginBottom: 32 }}>
-        <StatCard icon="PR" label="Total Properties" value={stats.totalProperties} />
-        <StatCard icon="US" label="Total Users" value={stats.totalUsers} />
-        <StatCard icon="IN" label="Total Inquiries" value={stats.totalInquiries} />
-        <StatCard icon="AVG" label="Avg. Properties per User" value={stats.totalUsers ? (stats.totalProperties / stats.totalUsers).toFixed(1) : 0} />
-      </div>
-
       {/* Charts row 1 */}
       <div className="charts-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 32 }}>
         <div style={{ background: '#ffffff', borderRadius: 16, border: '1px solid rgba(124,58,237,0.1)', padding: 20 }}>
@@ -796,10 +740,8 @@ export default function AdminDashboard() {
 
       <div style={{ maxWidth: 1200, margin: '0 auto', padding: '32px 6vw 64px' }}>
         {loading ? (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(180px,1fr))', gap: 20 }}>
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} style={{ height: 120, background: '#f0eeff', borderRadius: 16, animation: 'pulse 1.5s infinite' }} />
-            ))}
+          <div style={{ padding: 20, background: '#ffffff', border: '1px solid rgba(124,58,237,0.08)', borderRadius: 14, color: 'rgba(26,10,46,0.55)' }}>
+            Loading dashboard...
           </div>
         ) : (
           tabContent[tab]
@@ -854,4 +796,5 @@ function PaymentRow({ payment }) {
     </div>
   )
 }
+
 

@@ -1,30 +1,67 @@
 import api from "./api";
 
-const normalizeCreatePayload = (data = {}) => {
-  const propertyId = data.propertyId || data.property || data.property_id || null;
-  const buyerId = data.buyerId || data.buyer_id || data.userId || data.user || null;
-  const agentId = data.agentId || data.agent_id || data.ownerId || data.owner_id || null;
-  const scheduledDateValue = data.scheduledDate || data.scheduled_date || null;
-  const parsedDate = scheduledDateValue ? new Date(scheduledDateValue) : null;
-  const normalizedScheduledDate =
-    parsedDate && !Number.isNaN(parsedDate.getTime())
-      ? parsedDate.toISOString()
-      : scheduledDateValue;
+const normalizeScheduledDate = (value) => {
+  const parsedDate = value ? new Date(value) : null;
+  return parsedDate && !Number.isNaN(parsedDate.getTime())
+    ? parsedDate.toISOString()
+    : value;
+};
 
-  return {
-    ...data,
-    ...(propertyId ? { propertyId, property: propertyId, property_id: propertyId } : {}),
-    ...(buyerId ? { buyerId, buyer_id: buyerId, user: buyerId, userId: buyerId } : {}),
-    ...(agentId ? { agentId, agent_id: agentId, ownerId: agentId, owner_id: agentId } : {}),
-    ...(normalizedScheduledDate
-      ? { scheduledDate: normalizedScheduledDate, scheduled_date: normalizedScheduledDate }
-      : {}),
-    ...(typeof data.notes === "string" ? { notes: data.notes.trim() } : {}),
+const buildVisitCreatePayloads = (data = {}) => {
+  const propertyId = data.propertyId || data.property || data.property_id || null;
+  const agentId = data.agentId || data.agent_id || data.ownerId || data.owner_id || null;
+  const scheduledDate = normalizeScheduledDate(data.scheduledDate || data.scheduled_date || null);
+  const notes = typeof data.notes === "string" ? data.notes.trim() : "";
+
+  const minimalCamel = {
+    ...(propertyId ? { propertyId } : {}),
+    ...(agentId ? { agentId } : {}),
+    ...(scheduledDate ? { scheduledDate } : {}),
+    ...(notes ? { notes } : {}),
   };
+
+  const minimalSnake = {
+    ...(propertyId ? { property: propertyId } : {}),
+    ...(agentId ? { agent_id: agentId } : {}),
+    ...(scheduledDate ? { scheduled_date: scheduledDate } : {}),
+    ...(notes ? { notes } : {}),
+  };
+
+  const hybrid = {
+    ...(propertyId ? { propertyId, property: propertyId } : {}),
+    ...(agentId ? { agentId, agent_id: agentId } : {}),
+    ...(scheduledDate ? { scheduledDate, scheduled_date: scheduledDate } : {}),
+    ...(notes ? { notes } : {}),
+  };
+
+  return [minimalCamel, minimalSnake, hybrid].filter((payload) => Object.keys(payload).length > 0);
+};
+
+const isValidationFailure = (error) => {
+  const status = error?.response?.status;
+  return status === 400 || status === 422;
+};
+
+const createVisit = async (data) => {
+  const payloads = buildVisitCreatePayloads(data);
+  let lastError;
+
+  for (const payload of payloads) {
+    try {
+      return await api.post("/visits", payload, { timeout: 30000 });
+    } catch (error) {
+      lastError = error;
+      if (!isValidationFailure(error)) {
+        throw error;
+      }
+    }
+  }
+
+  throw lastError;
 };
 
 const visitService = {
-  create: (data) => api.post("/visits", normalizeCreatePayload(data)),
+  create: createVisit,
   getBuyerVisits: (params) => api.get("/visits/buyer", { params }),
   getAgentVisits: (params) => api.get("/visits/agent", { params }),
   update: (id, data) => api.put(`/visits/${id}`, data),

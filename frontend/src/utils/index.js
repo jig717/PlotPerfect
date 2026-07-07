@@ -36,7 +36,15 @@ export const getDashboardPath = (role) =>
 
 export const resolveApiAssetUrl = (path = '') => {
   if (!path) return ''
-  if (/^(https?:|data:|blob:)/i.test(path)) return path
+  if (/^(data:|blob:)/i.test(path)) return path
+
+  if (/^https?:/i.test(path)) {
+    const isLoopbackHttp = /^http:\/\/(localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0)(:\d+)?\//i.test(path)
+    if (typeof window !== 'undefined' && window.location.protocol === 'https:' && isLoopbackHttp) {
+      return ''
+    }
+    return path
+  }
 
   const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3400'
   const normalizedBase = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl

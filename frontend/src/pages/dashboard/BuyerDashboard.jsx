@@ -105,19 +105,6 @@ function DashboardShell({ children }) {
   return <div style={{ ...baseCardStyle, padding: 24 }}>{children}</div>
 }
 
-function StatCard({ eyebrow, label, value, tone }) {
-  return (
-    <div style={{ ...baseCardStyle, padding: 22, background: tone?.background || theme.surface, position: 'relative', overflow: 'hidden' }}>
-      <div style={{ position: 'absolute', top: -24, right: -18, width: 86, height: 86, borderRadius: '50%', background: tone?.orb || 'rgba(109, 40, 217, 0.10)' }} />
-      <div style={{ position: 'relative' }}>
-        <div style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', color: theme.textMute, marginBottom: 14 }}>{eyebrow}</div>
-        <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 34, fontWeight: 800, color: theme.text, lineHeight: 1 }}>{value}</div>
-        <div style={{ fontSize: 14, color: theme.textSoft, marginTop: 10 }}>{label}</div>
-      </div>
-    </div>
-  )
-}
-
 function SectionHeading({ title, sub, action }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 16, marginBottom: 18, flexWrap: 'wrap' }}>
@@ -367,18 +354,9 @@ function EmptyState({ title, sub, btn, to, onClick }) {
 function Overview({ saved, visits, inquiries, onOpenSavedTab }) {
   const navigate = useNavigate()
   const validSaved = saved.filter((item) => item && item.property)
-  const upcomingVisitCount = visits.filter((visit) => String(getVisitStatus(visit)).toUpperCase() !== 'CANCELLED').length
-  const respondedInquiryCount = inquiries.filter((inquiry) => Boolean(inquiry?.response)).length
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 26 }}>
-      <div className="buyer-stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 18 }}>
-        <StatCard eyebrow="Saved" label="Properties bookmarked for later" value={validSaved.length} tone={{ background: '#fff7ed', orb: 'rgba(251, 146, 60, 0.16)' }} />
-        <StatCard eyebrow="Visits" label="Scheduled and active property visits" value={upcomingVisitCount} tone={{ background: '#eefcf5', orb: 'rgba(16, 185, 129, 0.16)' }} />
-        <StatCard eyebrow="Inquiries" label="Conversations started with owners" value={inquiries.length} tone={{ background: '#f5f3ff', orb: 'rgba(109, 40, 217, 0.16)' }} />
-        <StatCard eyebrow="Responses" label="Owner replies received so far" value={respondedInquiryCount} tone={{ background: '#eff6ff', orb: 'rgba(59, 130, 246, 0.16)' }} />
-      </div>
-
       {validSaved.length > 0 ? (
         <DashboardShell>
           <SectionHeading title="Recently Saved" sub="A quick look at the properties you marked for later." action={validSaved.length > 3 ? <ActionButton onClick={onOpenSavedTab}>View All Saved</ActionButton> : null} />
@@ -723,9 +701,6 @@ export default function BuyerDashboard() {
           display: none;
         }
         @media (max-width: 980px) {
-          .buyer-stat-grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-          }
           .buyer-property-row {
             grid-template-columns: 1fr !important;
           }
@@ -743,9 +718,6 @@ export default function BuyerDashboard() {
           .buyer-header-actions > * {
             flex: 1 1 auto;
           }
-          .buyer-stat-grid {
-            grid-template-columns: 1fr !important;
-          }
           .buyer-row-actions {
             justify-content: stretch !important;
           }
@@ -761,9 +733,6 @@ export default function BuyerDashboard() {
           }
         }
         @media (max-width: 480px) {
-          .buyer-stat-grid {
-            grid-template-columns: 1fr !important;
-          }
           .buyer-header-row h1,
           .buyer-header-row > div > div:first-child {
             font-size: 24px !important;
@@ -825,11 +794,9 @@ export default function BuyerDashboard() {
 
       <div style={{ maxWidth: 1180, margin: '0 auto', padding: '28px 24px 72px' }}>
         {loading ? (
-          <div className="buyer-stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 18 }}>
-            {Array.from({ length: 4 }).map((_, index) => (
-              <div key={index} style={{ height: 150, borderRadius: 24, background: 'linear-gradient(90deg, rgba(255,255,255,0.7), rgba(243,237,255,0.95), rgba(255,255,255,0.7))', backgroundSize: '200% 100%', animation: 'buyerShimmer 1.4s linear infinite', border: `1px solid ${theme.border}` }} />
-            ))}
-          </div>
+          <DashboardShell>
+            <div style={{ color: theme.textSoft, fontSize: 14 }}>Loading dashboard...</div>
+          </DashboardShell>
         ) : (
           tabContent[tab]
         )}
@@ -837,12 +804,6 @@ export default function BuyerDashboard() {
 
       {activeInquiry ? <ThreadPanel inquiry={activeInquiry} user={user} onClose={() => setActiveInquiry(null)} /> : null}
 
-      <style>{`
-        @keyframes buyerShimmer {
-          0% { background-position: 200% 0; }
-          100% { background-position: -200% 0; }
-        }
-      `}</style>
     </div>
   )
 }

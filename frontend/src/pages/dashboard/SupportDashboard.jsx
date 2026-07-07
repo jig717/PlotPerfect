@@ -1,4 +1,4 @@
-  // src/pages/dashboard/SupportDashboard.jsx
+﻿  // src/pages/dashboard/SupportDashboard.jsx
   import { useState, useEffect, useCallback } from 'react'
   import { useNavigate } from 'react-router-dom'
   import { useAuth } from '../../context/AuthContext'
@@ -210,21 +210,6 @@
   }
 
   /* ────────────────────────────────────────
-    STAT MINI CARD
-  ──────────────────────────────────────── */
-  function MiniStat({ icon, label, value, color = '#7c3aed' }) {
-    return (
-      <div style={{ background: '#fff', border: '1px solid rgba(124,58,237,0.1)', borderRadius: 12, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 12 }}>
-        <div style={{ width: 40, height: 40, borderRadius: 10, background: '#f0eeff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>{icon}</div>
-        <div>
-          <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 22, fontWeight: 800, color: '#1a0a2e', lineHeight: 1 }}>{value}</div>
-          <div style={{ fontSize: 12, color: 'rgba(26,10,46,0.45)', marginTop: 3 }}>{label}</div>
-        </div>
-      </div>
-    )
-  }
-
-  /* ────────────────────────────────────────
     MAIN DASHBOARD
   ──────────────────────────────────────── */
   export default function SupportDashboard() {
@@ -313,10 +298,6 @@
       )
     }
 
-    // Stats
-    const openCount     = tickets.filter(t => t.status === 'Open').length
-    const inProgCount   = tickets.filter(t => t.status === 'In Progress').length
-    const resolvedCount = tickets.filter(t => t.status === 'Resolved').length
     const filteredInquiries = inquiries
       .slice()
       .sort((a, b) => new Date(b?.createdAt || 0) - new Date(a?.createdAt || 0))
@@ -330,14 +311,6 @@
     const tabContent = [
       /* ── TICKETS TAB ── */
       <div>
-        {/* Mini stats row */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(160px,1fr))', gap: 12, marginBottom: 24 }}>
-          <MiniStat icon="🎫" label="Total Tickets"  value={tickets.length} />
-          <MiniStat icon="🔴" label="Open"           value={openCount} />
-          <MiniStat icon="🔵" label="In Progress"    value={inProgCount} />
-          <MiniStat icon="✅" label="Resolved"        value={resolvedCount} />
-        </div>
-
         {loading ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i}/>)}

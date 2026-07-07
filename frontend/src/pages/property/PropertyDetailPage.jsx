@@ -3,13 +3,20 @@ import { useParams, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import { propertyService, inquiryService, reviewService, paymentService } from "../../services";
 import { useAuth } from "../../context/AuthContext";
-import { formatPrice, timeAgo, getInitials } from "../../utils/index";
+import { formatPrice, timeAgo, getInitials, resolveApiAssetUrl } from "../../utils/index";
 import api from "../../services/api";
 import visitService from "../../services/visitService";
 
 // Cloudinary configuration
 const CLOUD_NAME = import.meta.env.CLOUDINARY_CLOUD_NAME;
 const LOGO_URL = "https://checkout.razorpay.com/v1/logo.png"; // Fallback placeholder
+const BLOCKED_LOOPBACK_IMAGE = /^http:\/\/(localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0)(:\d+)?\//i;
+const MAX_ADVANCE_PAYMENT_AMOUNT = 100000;
+const RAZORPAY_PAYMENT_METHODS = {
+  upi: { label: "UPI", limit: 100000 },
+  card: { label: "Card", limit: Infinity },
+  netbanking: { label: "Net Banking", limit: 500000 },
+};
 
 // MOCK only for development when backend is down
 const MOCK = {
@@ -38,7 +45,13 @@ const MOCK = {
 
 const getImageUrl = (publicId, width, height) => {
   if (!publicId) return null;
-  if (publicId.startsWith("http")) return publicId;
+  if (publicId.startsWith("http")) {
+    if (window.location.protocol === "https:" && BLOCKED_LOOPBACK_IMAGE.test(publicId)) {
+      return `https://picsum.photos/id/104/${width}/${height}`;
+    }
+    return publicId;
+  }
+  if (publicId.startsWith("/")) return resolveApiAssetUrl(publicId);
   if (!CLOUD_NAME) return `https://picsum.photos/id/104/${width}/${height}`;
   return `https://res.cloudinary.com/${CLOUD_NAME}/image/upload/w_${width},h_${height},c_fill,q_auto,f_auto/${publicId}`;
 };
@@ -110,6 +123,39 @@ const getFullPaymentLabel = (property) => {
   return ["rent", "pg"].includes(listingType) ? "Pay Full Amount" : "Pay Full Price";
 };
 
+const getRazorpayPaymentMethod = (paymentMethod) =>
+  RAZORPAY_PAYMENT_METHODS[String(paymentMethod || "").toLowerCase()] ||
+  RAZORPAY_PAYMENT_METHODS.upi;
+
+const getRazorpayLimitMessage = (label = "payment", paymentMethod = "upi") => {
+  const method = getRazorpayPaymentMethod(paymentMethod);
+  if (!Number.isFinite(method.limit)) {
+    return `Razorpay rejected this ${label}. Please try another method or contact the owner or agent for bank transfer options.`;
+  }
+  return `${method.label} supports a maximum ${label} of ${formatPrice(method.limit)} per transaction. Please choose another method or contact the owner or agent for bank transfer or split payment options.`;
+};
+
+const isRazorpayAmountLimitError = (error) => {
+  const reason = String(error?.reason || "").toLowerCase();
+  const description = String(error?.description || "").toLowerCase();
+  return (
+    reason === "invalid_amount" ||
+    description.includes("amount exceeds") ||
+    description.includes("maximum amount")
+  );
+};
+
+const getRazorpayMethodOptions = (paymentMethod) => {
+  const normalizedMethod = String(paymentMethod || "").toLowerCase();
+  return {
+    card: normalizedMethod === "card",
+    upi: normalizedMethod === "upi",
+    netbanking: normalizedMethod === "netbanking",
+    wallet: false,
+    paylater: false,
+  };
+};
+
 const triggerInvoiceDownload = async (paymentId) => {
   if (!paymentId) return;
 
@@ -143,6 +189,19 @@ const getPaymentErrorMessage = (error, fallbackMessage) => {
   }
 
   return message;
+};
+
+const unwrapApiData = (payload) => payload?.data || payload || {};
+
+const getCompletedPaymentId = (payload) => {
+  const body = unwrapApiData(payload);
+  return (
+    body?._id ||
+    body?.paymentId ||
+    body?.payment?._id ||
+    body?.payment?.id ||
+    null
+  );
 };
 
 const normalizeFloorPlans = (property) => {
@@ -584,22 +643,12 @@ function ScheduleVisitModal({ property, onClose, onSuccess }) {
     try {
       const payload = {
         propertyId,
-        property: propertyId,
-        property_id: propertyId,
-        buyerId: user._id,
-        buyer_id: user._id,
-        user: user._id,
-        userId: user._id,
         scheduledDate: normalizedDate,
-        scheduled_date: normalizedDate,
         notes: notes.trim(),
       };
 
       if (ownerId) {
         payload.agentId = ownerId;
-        payload.agent_id = ownerId;
-        payload.ownerId = ownerId;
-        payload.owner_id = ownerId;
       }
 
       await visitService.create(payload);
@@ -619,6 +668,8 @@ function ScheduleVisitModal({ property, onClose, onSuccess }) {
         toast.info("You already have a visit request for this property. Opening your scheduled visits.");
         onClose();
         navigate("/dashboard/buyer");
+      } else if (err?.code === "ECONNABORTED") {
+        toast.error("Visit request is taking longer than expected. Please try again in a moment.");
       } else {
         console.error("Visit request failed:", err?.response?.data || err);
         toast.error(errorMessage || "Failed to schedule");
@@ -724,7 +775,7 @@ export default function PropertyDetailPage() {
     }
 
     try {
-      const data = await propertyService.getById(propertyId);
+      const data = await propertyService.getById(propertyId, { timeout: 30000 });
       const nextProperty = data?.data || data || null;
       if (!nextProperty) throw new Error("No property data received");
       setProperty(nextProperty);
@@ -735,14 +786,22 @@ export default function PropertyDetailPage() {
       if (!silent) {
         const status = err.response?.status;
         const message = err.response?.data?.message || err.message;
-        if (status === 500) {
+        if (err?.code === "ECONNABORTED") {
+          setError("Property details are taking longer than expected to load. Please try again in a moment.");
+        } else if (status === 500) {
           setError("Server error. Please try again later.");
         } else if (status === 404) {
           setError("Property not found.");
         } else {
           setError(message || "Failed to load property details.");
         }
-        if (import.meta.env.DEV && status !== 400 && propertyId !== "undefined") {
+        if (
+          import.meta.env.DEV &&
+          status !== 400 &&
+          err?.code !== "ECONNABORTED" &&
+          err?.response &&
+          propertyId !== "undefined"
+        ) {
           console.warn("Using mock property data (development only)");
           setProperty(MOCK);
           setError(null);
@@ -1465,7 +1524,7 @@ function AdvancePaymentModal({ property, onClose, onSuccess }) {
   const suggestedAmount = (() => {
     const basePrice = Number(property?.price || 0);
     if (!Number.isFinite(basePrice) || basePrice <= 0) return 50000;
-    return Math.max(25000, Math.round(basePrice * 0.01));
+    return Math.min(MAX_ADVANCE_PAYMENT_AMOUNT, Math.max(25000, Math.round(basePrice * 0.01)));
   })();
 
   useEffect(() => {
@@ -1493,6 +1552,17 @@ function AdvancePaymentModal({ property, onClose, onSuccess }) {
       return;
     }
 
+    const method = getRazorpayPaymentMethod(paymentMethod);
+    if (numericAmount > MAX_ADVANCE_PAYMENT_AMOUNT) {
+      toast.error(`Advance amount cannot exceed ${formatPrice(MAX_ADVANCE_PAYMENT_AMOUNT)}.`);
+      return;
+    }
+
+    if (Number.isFinite(method.limit) && numericAmount > method.limit) {
+      toast.error(getRazorpayLimitMessage("advance payment", paymentMethod));
+      return;
+    }
+
     setLoading(true);
     try {
       await loadRazorpayCheckout();
@@ -1504,12 +1574,17 @@ function AdvancePaymentModal({ property, onClose, onSuccess }) {
         notes: notes.trim(),
       });
 
-      const orderPayload = orderResponse?.data || {};
+      const orderPayload = unwrapApiData(orderResponse);
       const order = orderPayload?.order;
       const razorpayKeyId = orderPayload?.razorpayKeyId;
 
       if (!order?.id || !razorpayKeyId) {
         throw new Error("Unable to initialize Razorpay checkout.");
+      }
+
+      const orderAmount = Number(order?.amount || 0) / 100;
+      if (Number.isFinite(method.limit) && orderAmount > method.limit) {
+        throw new Error(getRazorpayLimitMessage("advance payment", paymentMethod));
       }
 
       const buyerName = String(orderPayload?.buyer?.name || user?.name || "").trim();
@@ -1530,6 +1605,7 @@ function AdvancePaymentModal({ property, onClose, onSuccess }) {
           description: `Advance payment for ${property?.title || "property"}`,
           image: LOGO_URL,
           order_id: order.id,
+          method: getRazorpayMethodOptions(paymentMethod),
           prefill,
           theme: {
             color: "#0f766e",
@@ -1548,7 +1624,7 @@ function AdvancePaymentModal({ property, onClose, onSuccess }) {
                 razorpaySignature: response.razorpay_signature,
               });
 
-              const completedPaymentId = verificationResponse?.data?._id;
+              const completedPaymentId = getCompletedPaymentId(verificationResponse);
               if (completedPaymentId) {
                 await triggerInvoiceDownload(completedPaymentId);
               }
@@ -1574,6 +1650,12 @@ function AdvancePaymentModal({ property, onClose, onSuccess }) {
           razorpay.on("payment.failed", (response) => {
             // Log the failure to console for debugging
             console.warn("Razorpay payment attempt failed:", response?.error);
+            if (isRazorpayAmountLimitError(response?.error)) {
+              const limitMessage = getRazorpayLimitMessage("advance payment", paymentMethod);
+              razorpay.close();
+              reject(new Error(limitMessage));
+              return;
+            }
 
             // We DON'T reject here because the user can usually try again 
             // with a different card/method without closing the modal.
@@ -1630,6 +1712,7 @@ function AdvancePaymentModal({ property, onClose, onSuccess }) {
             <input
               type="number"
               min="1"
+              max={MAX_ADVANCE_PAYMENT_AMOUNT}
               step="1"
               required
               value={amount}
@@ -1637,6 +1720,9 @@ function AdvancePaymentModal({ property, onClose, onSuccess }) {
               className="w-full p-3 rounded-xl border border-[rgba(124,58,237,0.2)] bg-[#f9f9ff] text-[#1a0a2e] outline-none focus:border-[#7c3aed]"
             />
           </div>
+          <p className="text-xs text-[rgba(26,10,46,0.55)]">
+            Maximum advance payment: {formatPrice(MAX_ADVANCE_PAYMENT_AMOUNT)}
+          </p>
 
           <div>
             <label className="block text-sm font-semibold text-[rgba(26,10,46,0.75)] mb-1">
@@ -1689,6 +1775,11 @@ function FullPaymentModal({ property, onClose, onSuccess }) {
   const payableAmount = Number(property?.price || 0);
   const listingType = String(property?.listingType || property?.purpose || "").toLowerCase();
   const amountLabel = ["rent", "pg"].includes(listingType) ? "Full Amount" : "Full Price";
+  const selectedMethod = getRazorpayPaymentMethod(paymentMethod);
+  const exceedsCheckoutLimit =
+    Number.isFinite(payableAmount) &&
+    Number.isFinite(selectedMethod.limit) &&
+    payableAmount > selectedMethod.limit;
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -1710,6 +1801,11 @@ function FullPaymentModal({ property, onClose, onSuccess }) {
       return;
     }
 
+    if (exceedsCheckoutLimit) {
+      toast.error(getRazorpayLimitMessage(amountLabel.toLowerCase(), paymentMethod));
+      return;
+    }
+
     setLoading(true);
     try {
       await loadRazorpayCheckout();
@@ -1720,12 +1816,17 @@ function FullPaymentModal({ property, onClose, onSuccess }) {
         notes: notes.trim(),
       });
 
-      const orderPayload = orderResponse?.data || {};
+      const orderPayload = unwrapApiData(orderResponse);
       const order = orderPayload?.order;
       const razorpayKeyId = orderPayload?.razorpayKeyId;
 
       if (!order?.id || !razorpayKeyId) {
         throw new Error("Unable to initialize Razorpay checkout.");
+      }
+
+      const orderAmount = Number(order?.amount || 0) / 100;
+      if (Number.isFinite(selectedMethod.limit) && orderAmount > selectedMethod.limit) {
+        throw new Error(getRazorpayLimitMessage(amountLabel.toLowerCase(), paymentMethod));
       }
 
       const buyerName = String(orderPayload?.buyer?.name || user?.name || "").trim();
@@ -1753,6 +1854,7 @@ function FullPaymentModal({ property, onClose, onSuccess }) {
           description: `Full payment for ${property?.title || "property"}`,
           image: LOGO_URL,
           order_id: order.id,
+          method: getRazorpayMethodOptions(paymentMethod),
           prefill,
           theme: {
             color: "#2563eb",
@@ -1773,7 +1875,7 @@ function FullPaymentModal({ property, onClose, onSuccess }) {
                 razorpaySignature: response.razorpay_signature,
               });
 
-              const completedPaymentId = verificationResponse?.data?._id;
+              const completedPaymentId = getCompletedPaymentId(verificationResponse);
               if (completedPaymentId) {
                 await triggerInvoiceDownload(completedPaymentId);
               }
@@ -1799,6 +1901,12 @@ function FullPaymentModal({ property, onClose, onSuccess }) {
           razorpay.on("payment.failed", (response) => {
             // Log the failure to console for debugging
             console.warn("Razorpay payment attempt failed:", response?.error);
+            if (isRazorpayAmountLimitError(response?.error)) {
+              const limitMessage = getRazorpayLimitMessage(amountLabel.toLowerCase(), paymentMethod);
+              razorpay.close();
+              reject(new Error(limitMessage));
+              return;
+            }
 
             // We DON'T reject here because the user can usually try again 
             // with a different card/method without closing the modal.
@@ -1845,6 +1953,11 @@ function FullPaymentModal({ property, onClose, onSuccess }) {
           <div className="text-xs text-[rgba(26,10,46,0.55)] mt-1">
             Payable amount: {formatPrice(payableAmount)}
           </div>
+          {exceedsCheckoutLimit && (
+            <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+              {getRazorpayLimitMessage(amountLabel.toLowerCase(), paymentMethod)}
+              </div>
+          )}
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -1890,7 +2003,7 @@ function FullPaymentModal({ property, onClose, onSuccess }) {
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || exceedsCheckoutLimit}
             className="w-full py-3 bg-linear-to-r from-[#1d4ed8] to-[#2563eb] text-white font-bold rounded-xl hover:shadow-lg transition disabled:opacity-70"
           >
             {loading ? "Opening Razorpay..." : `${amountLabel} With Razorpay`}
